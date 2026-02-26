@@ -1,0 +1,15 @@
+runConfig:
+  runtime: nodejs20
+
+outputFiles:
+  serverApp:
+    include:
+      - frontend/.next
+      - frontend/public
+      - frontend/node_modules
+      - frontend/package.json
+      - frontend/next.config.js
+
+scripts:
+  buildCommand: cd frontend && npm ci && npm run build
+  runCommand: node frontend/.next/standalone/server.js
