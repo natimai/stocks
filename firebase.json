@@ -1,4 +1,13 @@
-# Settings for Firebase App Hosting
-# This tells the Firebase builder where the application code resides
-source: frontend
-
+{
+    "hosting": {
+        "source": "frontend",
+        "ignore": [
+            "firebase.json",
+            "**/.*",
+            "**/node_modules/**"
+        ],
+        "frameworksBackend": {
+            "region": "us-east4"
+        }
+    }
+}
