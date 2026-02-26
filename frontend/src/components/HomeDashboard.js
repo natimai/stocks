@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     Activity, Search, TrendingUp, TrendingDown, BarChart2,
     Zap, Scale, Clock, ArrowRight, ChevronRight, Sparkles,
-    LayoutDashboard, ScanLine, Briefcase, User, LogOut
+    LayoutDashboard, ScanLine, Briefcase, User, LogOut, Lock
 } from 'lucide-react';
 import { auth, googleProvider } from '../lib/firebase';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
@@ -401,8 +401,9 @@ export default function HomeDashboard({ onSearch }) {
                     </h1>
 
                     <p className="text-white/40 text-lg md:text-xl max-w-xl mx-auto mb-12 leading-relaxed font-light">
-                        4 autonomous AI agents debate every stock — in seconds.
-                        Search any ticker to get an institutional-grade analysis.
+                        Search any stock and view market data for <strong>free</strong>.
+                        <br className="hidden md:block" />
+                        Get <strong>1 free AI analysis</strong> upon registration. Our AI is built on hundreds of financial studies for maximum accuracy.
                     </p>
 
                     {/* Search Bar */}
@@ -414,6 +415,7 @@ export default function HomeDashboard({ onSearch }) {
                             }
                             transition={{ duration: 0.25 }}
                             className="relative bg-[#111114] rounded-2xl overflow-hidden"
+                            style={{ border: '1px solid rgba(255,255,255,0.1)' }}
                         >
                             <Search
                                 className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 pointer-events-none"
@@ -427,20 +429,29 @@ export default function HomeDashboard({ onSearch }) {
                                 onKeyDown={handleKeyDown}
                                 onFocus={() => setIsFocused(true)}
                                 onBlur={() => setIsFocused(false)}
-                                placeholder="Search any stock ticker (e.g., NVDA, AAPL)..."
-                                className="w-full bg-transparent pl-14 pr-32 py-5 text-white text-base outline-none placeholder:text-white/25"
+                                placeholder={"Search any stock ticker (e.g., NVDA, AAPL)..."}
+                                className={`w-full bg-transparent pl-14 pr-[160px] py-5 text-base outline-none text-white placeholder:text-white/25`}
                                 style={{ fontFamily: 'Inter, sans-serif', letterSpacing: '0.01em' }}
                             />
-                            <motion.button
-                                type="submit"
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.97 }}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-black"
-                                style={{ backgroundColor: '#00C805' }}
-                            >
-                                Analyze
-                                <ArrowRight className="w-3.5 h-3.5" />
-                            </motion.button>
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2 z-10">
+                                <motion.button
+                                    type="submit"
+                                    whileHover={{ scale: 1.02 }}
+                                    whileTap={{ scale: 0.97 }}
+                                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-black bg-[#00C805] hover:bg-[#00e005] shadow-[0_0_15px_rgba(0,200,5,0.15)] transition-all"
+                                >
+                                    Analyze <ArrowRight className="w-4 h-4" />
+                                </motion.button>
+                            </div>
+                        </motion.div>
+
+                        {/* Free Tier Explainer Text */}
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="mt-4 flex items-center justify-center gap-2 text-sm text-white/50"
+                        >
+                            <span><strong className="text-white/80">100% Free</strong> Search & Live Data. <strong className="text-[#00C805]">1 Free AI Analysis</strong> on sign up.</span>
                         </motion.div>
                     </form>
 

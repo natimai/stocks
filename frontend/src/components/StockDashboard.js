@@ -1,7 +1,11 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { TrendingUp, TrendingDown, CheckCircle2, AlertTriangle, Shield, Zap, Search, Activity, CornerDownRight, ArrowLeft, User, LogOut } from 'lucide-react';
+import {
+    Activity, ArrowLeft,
+    TrendingUp, TrendingDown, Clock, Search, Briefcase, Zap, AlertTriangle, CheckCircle2,
+    LayoutDashboard, ScanLine, User, LogOut, Lock, Star
+} from 'lucide-react';
 import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
 import CommandPalette from './CommandPalette';
 import RollingPrice from './RollingPrice';
@@ -143,11 +147,14 @@ export default function StockDashboard({ initialTicker, onBack }) {
     const [hoverPrice, setHoverPrice] = useState(null);
     const [hoverDate, setHoverDate] = useState(null);
     const [user, setUser] = useState(null);
+    const [authLoading, setAuthLoading] = useState(true);
+    const [showPaywall, setShowPaywall] = useState(false);
 
     // Track Auth State
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
             setUser(currentUser);
+            setAuthLoading(false);
         });
         return () => unsubscribe();
     }, []);
@@ -254,8 +261,30 @@ export default function StockDashboard({ initialTicker, onBack }) {
             await fetchChart.current(selectedTicker, defaultTF);
 
             // 2. Slow path: AI Stream
-            setStreamMsg('Initializing FinDebate AI Framework...');
-            const slowRes = await fetch(`http://localhost:8000/api/analyze/${selectedTicker}`);
+            setStreamMsg('Verifying access & Initializing FinDebate AI Framework...');
+
+            let idToken = '';
+            if (user) {
+                idToken = await user.getIdToken();
+            } else {
+                // Not logged in, prompt sign in paywall.
+                setShowPaywall(true);
+                setLoading(false);
+                return;
+            }
+
+            const slowRes = await fetch(`http://localhost:8000/api/analyze/${selectedTicker}`, {
+                headers: {
+                    'Authorization': `Bearer ${idToken}`
+                }
+            });
+
+            if (slowRes.status === 403 || slowRes.status === 401) {
+                // Paywall or unauthorized hit
+                setShowPaywall(true);
+                setLoading(false);
+                return;
+            }
 
             if (slowRes.ok && slowRes.body) {
                 const reader = slowRes.body.getReader();
@@ -838,6 +867,63 @@ export default function StockDashboard({ initialTicker, onBack }) {
                         <p className="text-[10px] text-white/20 uppercase tracking-widest font-bold">Pure Data • No Noise</p>
                     </div>
                 </footer>
+
+                {/* ── INLINE AI PAYWALL ── */}
+                <AnimatePresence>
+                    {showPaywall && (
+                        <motion.section
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0 }}
+                            className="pt-8 mb-16 border-t border-[#1E1E24]"
+                        >
+                            <div className="bg-[#111114] border border-white/10 p-8 md:p-12 rounded-3xl w-full text-center relative overflow-hidden shadow-2xl mt-4">
+                                {/* Decorative glow */}
+                                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-48 bg-[#00C805]/10 blur-[60px] pointer-events-none" />
+
+                                <div className="mx-auto w-16 h-16 bg-[#1A1A1E] border border-[#00C805]/20 rounded-2xl flex items-center justify-center mb-6 relative z-10">
+                                    <Lock className="w-8 h-8 text-[#00C805]" />
+                                    <div className="absolute -top-2 -right-2 bg-black rounded-full p-1 border border-white/10">
+                                        <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+                                    </div>
+                                </div>
+
+                                <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-white mb-4 relative z-10">
+                                    {!user ? "Unlock Premium AI Analysis" : "Upgrade to Pro"}
+                                </h2>
+
+                                <div className="text-white/60 mb-8 leading-relaxed max-w-xl mx-auto space-y-4 relative z-10">
+                                    <p className="text-lg">
+                                        Our proprietary AI algorithm is developed based on hundreds of financial studies and market research papers to achieve the most accurate automated analysis possible.
+                                    </p>
+                                    <p className="font-medium text-white/80">
+                                        {!user
+                                            ? "Create a 100% free account today to get your first full AI analysis on the house."
+                                            : "You've used your free analysis. Upgrade to QuantAI Pro for unlimited scans, live market vectors, and real-time agent debates."}
+                                    </p>
+                                </div>
+
+                                <div className="max-w-sm mx-auto space-y-4 relative z-10">
+                                    {!user ? (
+                                        <button
+                                            onClick={handleGoogleLogin}
+                                            className="w-full flex items-center justify-center gap-2 py-4 rounded-xl text-black font-bold text-lg bg-[#00C805] hover:bg-[#00e005] transition-all shadow-[0_0_20px_rgba(0,200,5,0.2)] hover:shadow-[0_0_30px_rgba(0,200,5,0.3)] transform hover:scale-[1.02]"
+                                        >
+                                            Get 1 Free Analysis
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={() => window.location.href = '#upgrade'}
+                                            className="w-full flex items-center justify-center gap-2 py-4 rounded-xl text-black font-bold text-lg bg-[#00C805] hover:bg-[#00e005] transition-all shadow-[0_0_20px_rgba(0,200,5,0.2)] hover:shadow-[0_0_30px_rgba(0,200,5,0.3)] transform hover:scale-[1.02]"
+                                        >
+                                            Unlock Unlimited Access
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        </motion.section>
+                    )}
+                </AnimatePresence>
 
             </main>
         </div >

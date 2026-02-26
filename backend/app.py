@@ -1,10 +1,76 @@
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Depends, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import requests
 from analysis_engine import analyze_stock_stream, get_historical_data
 import yfinance as yf
+
+import firebase_admin
+from firebase_admin import credentials, auth, firestore
+
+# Initialize Firebase Admin
+try:
+    cred = credentials.Certificate("firebase-credentials.json")
+    firebase_admin.initialize_app(cred)
+    db = firestore.client()
+except Exception as e:
+    print(f"Warning: Could not initialize Firebase Admin SDK. {e}")
+
+security = HTTPBearer()
+
+def verify_token_and_check_limit(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """
+    Verifies the JWT token and checks if the user has reached their 1 free analysis limit.
+    If they are 'isPro', bypass the limit.
+    """
+    try:
+        token = credentials.credentials
+        decoded_token = auth.verify_id_token(token)
+        uid = decoded_token['uid']
+        email = decoded_token.get('email', '')
+        name = decoded_token.get('name', 'User')
+
+        # Check user in Firestore
+        user_ref = db.collection('users').document(uid)
+        user_doc = user_ref.get()
+
+        if user_doc.exists:
+            user_data = user_doc.to_dict()
+            is_pro = user_data.get('isPro', False)
+            analysis_count = user_data.get('analysisCount', 0)
+        else:
+            # First time user
+            is_pro = False
+            analysis_count = 0
+            user_ref.set({
+                'uid': uid,
+                'email': email,
+                'name': name,
+                'isPro': is_pro,
+                'analysisCount': analysis_count,
+                'createdAt': firestore.SERVER_TIMESTAMP
+            })
+
+        # Apply Paywall Rule
+        if not is_pro and analysis_count >= 1:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="PAYWALL_LIMIT_REACHED"
+            )
+            
+        return {"uid": uid, "user_ref": user_ref, "isPro": is_pro, "analysisCount": analysis_count}
+
+    except auth.InvalidIdTokenError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid auth token")
+    except auth.ExpiredIdTokenError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Expired auth token")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Auth error: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Authentication failed")
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -27,14 +93,21 @@ def read_root():
     return {"message": "Welcome to the SaaS Stock Analysis API. Use /api/analyze/{ticker} to get real-time scores."}
 
 @app.get("/api/analyze/{ticker}")
-async def get_stock_analysis(ticker: str):
+async def get_stock_analysis(ticker: str, user_data: dict = Depends(verify_token_and_check_limit)):
     """
     Endpoint to retrieve complete AI-driven stock analysis for a given ticker,
     streamed sequentially (Bull -> Bear -> Quant -> CIO).
+    Requires Authentication.
     """
     if not ticker or len(ticker) > 10:
         raise HTTPException(status_code=400, detail="Invalid ticker symbol provided.")
         
+    # Increment usage count if not Pro
+    if not user_data['isPro']:
+        user_data['user_ref'].update({
+            'analysisCount': firestore.Increment(1)
+        })
+
     return StreamingResponse(analyze_stock_stream(ticker), media_type="text/event-stream")
 
 @app.get("/api/chart/{ticker}")
