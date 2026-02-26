@@ -1,15 +1,14 @@
 runConfig:
   runtime: nodejs20
 
+scripts:
+  buildCommand: npm ci && npm run build
+  runCommand: node .next/standalone/server.js
+
 outputFiles:
   serverApp:
     include:
-      - frontend/.next
-      - frontend/public
-      - frontend/node_modules
-      - frontend/package.json
-      - frontend/next.config.js
-
-scripts:
-  buildCommand: cd frontend && npm ci && npm run build
-  runCommand: node frontend/.next/standalone/server.js
+      - .next
+      - public
+      - package.json
+      - next.config.js
