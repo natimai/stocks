@@ -1,0 +1,4 @@
+# Settings for Firebase App Hosting
+# This tells the Firebase builder where the application code resides
+source: frontend
+
