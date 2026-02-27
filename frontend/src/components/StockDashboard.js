@@ -149,12 +149,30 @@ export default function StockDashboard({ initialTicker, onBack }) {
     const [user, setUser] = useState(null);
     const [authLoading, setAuthLoading] = useState(true);
     const [showPaywall, setShowPaywall] = useState(false);
-    const [pendingTicker, setPendingTicker] = useState(null);
+    const [userProfile, setUserProfile] = useState(null); // { isPro, autoAnalysis, analysisCount }
+    const [aiStarted, setAiStarted] = useState(false);    // has AI analysis been kicked off this session
 
-    // Track Auth State
+    // Track Auth State + fetch user profile from Firestore
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
             setUser(currentUser);
+            if (currentUser) {
+                try {
+                    const token = await currentUser.getIdToken();
+                    const res = await fetch(
+                        `https://quantai-backend-316459358121.europe-west1.run.app/api/user-profile`,
+                        { headers: { Authorization: `Bearer ${token}` } }
+                    );
+                    if (res.ok) {
+                        const profile = await res.json();
+                        setUserProfile(profile);
+                    }
+                } catch (e) {
+                    // profile fetch failed — treat as free user
+                }
+            } else {
+                setUserProfile(null);
+            }
             setAuthLoading(false);
         });
         return () => unsubscribe();
@@ -164,7 +182,12 @@ export default function StockDashboard({ initialTicker, onBack }) {
     useEffect(() => {
         if (!authLoading && pendingTicker) {
             setPendingTicker(null);
-            handleSearch(pendingTicker);
+            // If Pro user with autoAnalysis on, run full analysis; otherwise just load data
+            if (userProfile?.isPro && userProfile?.autoAnalysis) {
+                handleSearch(pendingTicker);
+            } else {
+                loadStockData(pendingTicker);
+            }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [authLoading]);
@@ -241,61 +264,69 @@ export default function StockDashboard({ initialTicker, onBack }) {
         }
     }, []);
 
-    // Auto-trigger analysis when an initialTicker is passed from the homepage
+    // Auto-trigger: load stock data immediately. AI analysis awaits user click (unless Pro + autoAnalysis).
     useEffect(() => {
         if (initialTicker) {
             if (authLoading) {
-                // Auth not resolved yet — queue the ticker
                 setPendingTicker(initialTicker);
-            } else {
+            } else if (userProfile?.isPro && userProfile?.autoAnalysis) {
                 handleSearch(initialTicker);
+            } else {
+                loadStockData(initialTicker);
             }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // ── SEARCH HANDLER ──
-    const handleSearch = async (selectedTicker) => {
+    // ── FAST PATH: Load market data only (no auth needed) ──
+    const loadStockData = async (selectedTicker) => {
         if (!selectedTicker) return;
         setTicker(selectedTicker);
         setLoading(true);
         setData(null);
+        setAiStarted(false);
+        setShowPaywall(false);
         setLiveDebate({ bull: '', bear: '', quant: '', cio: '' });
-        setStreamMsg('Fetching live data...');
+        setStreamMsg('');
 
         try {
-            // 1. Fast path: quote & chart
             const fastRes = await fetch(`https://quantai-backend-316459358121.europe-west1.run.app/api/quick-stats/${selectedTicker}`);
             if (!fastRes.ok) throw new Error('Invalid ticker');
             const fast = await fastRes.json();
             setData(fast);
-            // Reset to 1M view and fetch fresh chart data for that timeframe
             const defaultTF = '1M';
             setTimeframe(defaultTF);
-            // The quick-stats daily changePercent is used for 1D; fetch 1M chart for initial state
             await fetchChart.current(selectedTicker, defaultTF);
+        } catch (err) {
+            setStreamMsg('Error: Could not retrieve data. Try another ticker.');
+        } finally {
+            setLoading(false);
+        }
+    };
 
-            // 2. Slow path: AI Stream
-            setStreamMsg('Verifying access & Initializing FinDebate AI Framework...');
+    // ── SLOW PATH: Run AI analysis (requires auth) ──
+    const runAiAnalysis = async (selectedTicker) => {
+        if (!selectedTicker) return;
+        setAiStarted(true);
+        setLoading(true);
+        setStreamMsg('Verifying access & Initializing FinDebate AI Framework...');
 
-            let idToken = '';
-            if (user) {
-                idToken = await user.getIdToken();
-            } else {
-                // Not logged in, prompt sign in paywall.
-                setShowPaywall(true);
-                setLoading(false);
-                return;
-            }
+        let idToken = '';
+        if (user) {
+            idToken = await user.getIdToken();
+        } else {
+            setShowPaywall(true);
+            setLoading(false);
+            return;
+        }
 
+        try {
             const slowRes = await fetch(`https://quantai-backend-316459358121.europe-west1.run.app/api/analyze/${selectedTicker}`, {
-                headers: {
-                    'Authorization': `Bearer ${idToken}`
-                }
+                headers: { 'Authorization': `Bearer ${idToken}` }
             });
 
             if (slowRes.status === 403 || slowRes.status === 401) {
-                // Paywall or unauthorized hit
                 setShowPaywall(true);
                 setLoading(false);
                 return;
@@ -342,9 +373,17 @@ export default function StockDashboard({ initialTicker, onBack }) {
                 setLoading(false);
             }
         } catch (err) {
-            console.error("Search error:", err);
-            setStreamMsg('Error: Could not retrieve data. Try another ticker.');
+            console.error('AI analysis error:', err);
+            setStreamMsg('Error: AI analysis failed.');
             setLoading(false);
+        }
+    };
+
+    // ── LEGACY: full search (data + AI) used for internal search bar ──
+    const handleSearch = async (selectedTicker) => {
+        await loadStockData(selectedTicker);
+        if (!authLoading) {
+            await runAiAnalysis(selectedTicker);
         }
     };
 
@@ -783,6 +822,52 @@ export default function StockDashboard({ initialTicker, onBack }) {
                             </ul>
                         </div>
                     </section>
+                )}
+
+                {/* ── AI ANALYSIS CTA ── shown when market data is loaded and AI hasn't been triggered */}
+                {data && !aiStarted && !showPaywall && (
+                    <motion.section
+                        initial={{ opacity: 0, y: 16 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="pt-8 border-t border-[#1E1E24]"
+                    >
+                        <div className="bg-[#111114] border border-[#00C805]/20 rounded-3xl p-8 md:p-10 text-center relative overflow-hidden">
+                            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-32 bg-[#00C805]/8 blur-[50px] pointer-events-none" />
+                            <Zap className="w-8 h-8 text-[#00C805] mx-auto mb-4 relative z-10" />
+                            <h3 className="text-2xl font-bold text-white mb-2 relative z-10">Run AI Analysis</h3>
+                            <p className="text-white/50 text-sm mb-6 max-w-md mx-auto relative z-10">
+                                Our multi-agent AI framework — built on hundreds of financial studies — will debate the bull, bear, quant, and macro case for <strong className="text-white/80">{ticker}</strong>.
+                            </p>
+                            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 relative z-10">
+                                {!user ? (
+                                    <button
+                                        onClick={handleGoogleLogin}
+                                        className="flex items-center gap-2 px-8 py-3.5 rounded-xl bg-[#00C805] hover:bg-[#00e005] text-black font-bold text-base transition-all shadow-[0_0_20px_rgba(0,200,5,0.2)] hover:shadow-[0_0_30px_rgba(0,200,5,0.35)] hover:scale-[1.03]"
+                                    >
+                                        <Zap className="w-4 h-4" /> Sign in for 1 Free Analysis
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={() => runAiAnalysis(ticker)}
+                                        className="flex items-center gap-2 px-8 py-3.5 rounded-xl bg-[#00C805] hover:bg-[#00e005] text-black font-bold text-base transition-all shadow-[0_0_20px_rgba(0,200,5,0.2)] hover:shadow-[0_0_30px_rgba(0,200,5,0.35)] hover:scale-[1.03]"
+                                    >
+                                        <Zap className="w-4 h-4" /> Start AI Analysis
+                                    </button>
+                                )}
+                                {user && userProfile?.isPro && (
+                                    <span className="text-xs text-white/30 flex items-center gap-1">
+                                        <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
+                                        Pro — Unlimited
+                                    </span>
+                                )}
+                                {user && !userProfile?.isPro && (
+                                    <span className="text-xs text-white/30">
+                                        {1 - (userProfile?.analysisCount || 0)} free analysis remaining
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    </motion.section>
                 )}
 
                 {/* ── SECTION 5: AI AGENTS DEBATE ROOM ── */}

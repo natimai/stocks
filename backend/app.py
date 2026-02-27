@@ -101,6 +101,41 @@ app.add_middleware(
 def read_root():
     return {"message": "Welcome to the SaaS Stock Analysis API. Use /api/analyze/{ticker} to get real-time scores."}
 
+@app.get("/api/user-profile")
+def get_user_profile(user_data: dict = Depends(verify_token_and_check_limit)):
+    """Returns the current user's profile (isPro, analysisCount, autoAnalysis)."""
+    user_ref = user_data['user_ref']
+    doc = user_ref.get()
+    if doc.exists:
+        d = doc.to_dict()
+        return {
+            "uid": user_data['uid'],
+            "isPro": d.get('isPro', False),
+            "analysisCount": d.get('analysisCount', 0),
+            "autoAnalysis": d.get('autoAnalysis', False),
+        }
+    return {"uid": user_data['uid'], "isPro": False, "analysisCount": 0, "autoAnalysis": False}
+
+from pydantic import BaseModel
+
+class UserSettings(BaseModel):
+    autoAnalysis: bool | None = None
+
+@app.patch("/api/user-settings")
+def update_user_settings(settings: UserSettings, user_data: dict = Depends(verify_token_and_check_limit)):
+    """Allows Pro users to update their profile settings (e.g., autoAnalysis)."""
+    user_ref = user_data['user_ref']
+    updates = {}
+    # Only Pro users can set autoAnalysis
+    if settings.autoAnalysis is not None:
+        if user_data.get('isPro'):
+            updates['autoAnalysis'] = settings.autoAnalysis
+        else:
+            raise HTTPException(status_code=403, detail="Auto-analysis is a Pro feature.")
+    if updates:
+        user_ref.update(updates)
+    return {"success": True}
+
 @app.get("/api/analyze/{ticker}")
 async def get_stock_analysis(ticker: str, user_data: dict = Depends(verify_token_and_check_limit)):
     """
