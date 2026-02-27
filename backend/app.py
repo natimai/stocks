@@ -11,12 +11,21 @@ import firebase_admin
 from firebase_admin import credentials, auth, firestore
 
 # Initialize Firebase Admin
+# On Cloud Run, ADC is used automatically.
+# Locally, falls back to firebase-credentials.json.
+import os
+
 try:
-    cred = credentials.Certificate("firebase-credentials.json")
-    firebase_admin.initialize_app(cred)
+    if os.path.exists("firebase-credentials.json"):
+        cred = credentials.Certificate("firebase-credentials.json")
+        firebase_admin.initialize_app(cred)
+    else:
+        firebase_admin.initialize_app()  # Uses ADC on Cloud Run
     db = firestore.client()
+    print("Firebase Admin SDK initialized successfully.")
 except Exception as e:
     print(f"Warning: Could not initialize Firebase Admin SDK. {e}")
+    db = None
 
 security = HTTPBearer()
 

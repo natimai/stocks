@@ -26,7 +26,7 @@ export default function CommandPalette({ onSelect }) {
             }
             setLoading(true);
             try {
-                const res = await fetch(`https://quantai-stocks.loca.lt/api/search?q=${encodeURIComponent(query)}`);
+                const res = await fetch(`https://quantai-backend-316459358121.europe-west1.run.app/api/search?q=${encodeURIComponent(query)}`);
                 if (res.ok) {
                     const data = await res.json();
                     setResults(data);
