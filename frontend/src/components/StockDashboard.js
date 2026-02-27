@@ -185,7 +185,7 @@ export default function StockDashboard({ initialTicker, onBack }) {
         const { period, interval } = TIMEFRAME_MAP[tf] || TIMEFRAME_MAP['1M'];
         setChartLoading(true);
         try {
-            const res = await fetch(`http://localhost:8000/api/chart/${sym}?period=${period}&interval=${interval}`);
+            const res = await fetch(`https://quantai-stocks.loca.lt/api/chart/${sym}?period=${period}&interval=${interval}`);
             if (!res.ok) return;
             const raw = await res.json();
             if (!Array.isArray(raw) || raw.length === 0) return;
@@ -250,7 +250,7 @@ export default function StockDashboard({ initialTicker, onBack }) {
 
         try {
             // 1. Fast path: quote & chart
-            const fastRes = await fetch(`http://localhost:8000/api/quick-stats/${selectedTicker}`);
+            const fastRes = await fetch(`https://quantai-stocks.loca.lt/api/quick-stats/${selectedTicker}`);
             if (!fastRes.ok) throw new Error('Invalid ticker');
             const fast = await fastRes.json();
             setData(fast);
@@ -273,7 +273,7 @@ export default function StockDashboard({ initialTicker, onBack }) {
                 return;
             }
 
-            const slowRes = await fetch(`http://localhost:8000/api/analyze/${selectedTicker}`, {
+            const slowRes = await fetch(`https://quantai-stocks.loca.lt/api/analyze/${selectedTicker}`, {
                 headers: {
                     'Authorization': `Bearer ${idToken}`
                 }

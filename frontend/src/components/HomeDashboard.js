@@ -209,7 +209,7 @@ export default function HomeDashboard({ onSearch }) {
                 const pickResults = await Promise.all(
                     TOP_PICKS_TICKERS.map(async ({ ticker, name }) => {
                         try {
-                            const res = await fetch(`http://localhost:8000/api/quick-stats/${ticker}`);
+                            const res = await fetch(`https://quantai-stocks.loca.lt/api/quick-stats/${ticker}`);
                             if (!res.ok) throw new Error('fail');
                             const d = await res.json();
                             const isUp = (d.changePercent ?? 0) >= 0;
@@ -235,7 +235,7 @@ export default function HomeDashboard({ onSearch }) {
                 const scanResults = await Promise.all(
                     RECENT_SCANS_TICKERS.map(async (ticker, i) => {
                         try {
-                            const res = await fetch(`http://localhost:8000/api/quick-stats/${ticker}`);
+                            const res = await fetch(`https://quantai-stocks.loca.lt/api/quick-stats/${ticker}`);
                             if (!res.ok) throw new Error('fail');
                             const d = await res.json();
                             const isUp = (d.changePercent ?? 0) >= 0;
