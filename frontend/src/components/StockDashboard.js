@@ -149,6 +149,7 @@ export default function StockDashboard({ initialTicker, onBack }) {
     const [user, setUser] = useState(null);
     const [authLoading, setAuthLoading] = useState(true);
     const [showPaywall, setShowPaywall] = useState(false);
+    const [pendingTicker, setPendingTicker] = useState(null);
 
     // Track Auth State
     useEffect(() => {
@@ -158,6 +159,15 @@ export default function StockDashboard({ initialTicker, onBack }) {
         });
         return () => unsubscribe();
     }, []);
+
+    // Once auth resolves and there's a pending ticker, trigger the analysis
+    useEffect(() => {
+        if (!authLoading && pendingTicker) {
+            setPendingTicker(null);
+            handleSearch(pendingTicker);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [authLoading]);
 
     const handleGoogleLogin = async () => {
         try {
@@ -234,7 +244,12 @@ export default function StockDashboard({ initialTicker, onBack }) {
     // Auto-trigger analysis when an initialTicker is passed from the homepage
     useEffect(() => {
         if (initialTicker) {
-            handleSearch(initialTicker);
+            if (authLoading) {
+                // Auth not resolved yet — queue the ticker
+                setPendingTicker(initialTicker);
+            } else {
+                handleSearch(initialTicker);
+            }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
