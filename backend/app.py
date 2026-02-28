@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Query, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 import uvicorn
 import requests
 from analysis_engine import analyze_stock_stream, get_historical_data
@@ -161,8 +162,6 @@ def get_user_profile(user_data: dict = Depends(verify_token_and_check_limit)):
             "autoAnalysis": d.get('autoAnalysis', False),
         }
     return {"uid": user_data['uid'], "isPro": False, "analysisCount": 0, "autoAnalysis": False}
-
-from pydantic import BaseModel
 
 class UserSettings(BaseModel):
     autoAnalysis: bool | None = None
