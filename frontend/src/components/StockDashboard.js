@@ -534,11 +534,11 @@ export default function StockDashboard({ initialTicker, onBack }) {
                                 <span className="hidden sm:inline">Home</span>
                             </button>
                         )}
-                        <div className="flex items-center gap-2 group cursor-pointer" onClick={onBack || (() => window.location.reload())}>
-                            <div className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-colors group-hover:opacity-80">
+                        <div className="flex items-center gap-3 group cursor-pointer" onClick={onBack || (() => window.location.reload())}>
+                            <div className="shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center transition-colors group-hover:opacity-80">
                                 <img src="/logo.svg" alt="ConsensusAI Logo" className="w-full h-full object-contain" />
                             </div>
-                            <span className="hidden sm:inline-block font-semibold tracking-tight text-lg text-white/90">Consensus<span className="text-[#00C805]">AI</span></span>
+                            <span className="hidden sm:inline-block font-bold tracking-tight text-xl text-white/90">Consensus<span className="text-[#00C805]">AI</span></span>
                         </div>
                     </div>
 

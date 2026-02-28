@@ -322,11 +322,11 @@ export default function HomeDashboard({ onSearch }) {
             >
                 <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
                     {/* Logo */}
-                    <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-full flex items-center justify-center">
+                    <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center">
                             <img src="/logo.svg" alt="ConsensusAI Logo" className="w-full h-full object-contain" />
                         </div>
-                        <span className="font-bold text-lg tracking-tight text-white">
+                        <span className="font-bold text-xl tracking-tight text-white">
                             Consensus<span className="text-[#00C805]">AI</span>
                         </span>
                     </div>
