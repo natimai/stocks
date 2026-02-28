@@ -117,8 +117,8 @@ export default function AdminPage() {
                     <a href="/" className="text-white/40 hover:text-white transition-colors">
                         <ArrowLeft className="w-5 h-5" />
                     </a>
-                    <Activity className="w-5 h-5 text-[#00C805]" />
-                    <span className="font-bold tracking-tight">QuantAI Admin</span>
+                    <img src="/logo.svg" alt="ConsensusAI Logo" className="w-5 h-5" />
+                    <span className="font-bold tracking-tight">ConsensusAI Admin</span>
                     <span className="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Staff Only</span>
                 </div>
                 <div className="flex items-center gap-4">
@@ -223,8 +223,8 @@ export default function AdminPage() {
                                             onClick={() => togglePro(u.uid, u.isPro)}
                                             disabled={updating === u.uid}
                                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${u.isPro
-                                                    ? 'bg-yellow-400/20 text-yellow-400 hover:bg-red-500/20 hover:text-red-400'
-                                                    : 'bg-white/5 text-white/40 hover:bg-yellow-400/20 hover:text-yellow-400'
+                                                ? 'bg-yellow-400/20 text-yellow-400 hover:bg-red-500/20 hover:text-red-400'
+                                                : 'bg-white/5 text-white/40 hover:bg-yellow-400/20 hover:text-yellow-400'
                                                 } ${updating === u.uid ? 'opacity-50 cursor-wait' : ''}`}
                                         >
                                             {updating === u.uid ? (

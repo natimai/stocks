@@ -535,10 +535,10 @@ export default function StockDashboard({ initialTicker, onBack }) {
                             </button>
                         )}
                         <div className="flex items-center gap-2 group cursor-pointer" onClick={onBack || (() => window.location.reload())}>
-                            <div className="shrink-0 w-8 h-8 rounded-full bg-[#1E1E24] flex items-center justify-center transition-colors group-hover:bg-white/10">
-                                <Activity className="w-4 h-4 text-white" />
+                            <div className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-colors group-hover:opacity-80">
+                                <img src="/logo.svg" alt="ConsensusAI Logo" className="w-full h-full object-contain" />
                             </div>
-                            <span className="hidden sm:inline-block font-semibold tracking-tight text-lg text-white/90">Quant<span className="text-white">AI</span></span>
+                            <span className="hidden sm:inline-block font-semibold tracking-tight text-lg text-white/90">Consensus<span className="text-[#00C805]">AI</span></span>
                         </div>
                     </div>
 
@@ -1023,8 +1023,8 @@ export default function StockDashboard({ initialTicker, onBack }) {
                     <div className="flex flex-col md:flex-row justify-between items-start gap-8 mb-12">
                         <div className="max-w-xs">
                             <div className="flex items-center gap-2 mb-4">
-                                <Activity className="w-4 h-4 text-white/50" />
-                                <span className="font-semibold tracking-tight text-white/50">QuantAI</span>
+                                <img src="/logo.svg" alt="ConsensusAI Logo" className="w-4 h-4" />
+                                <span className="font-semibold tracking-tight text-white/50">ConsensusAI</span>
                             </div>
                             <p className="text-xs text-white/40 leading-relaxed">
                                 Advanced multi-agent framework analyzing quantitative and fundamental market structures in real-time.
@@ -1050,7 +1050,7 @@ export default function StockDashboard({ initialTicker, onBack }) {
                         </div>
                     </div>
                     <div className="flex flex-col md:flex-row items-center justify-between pt-8 border-t border-[#1E1E24]/50 gap-4">
-                        <p className="text-xs text-white/30 font-medium">© 2026 QuantAI Technologies. All rights reserved.</p>
+                        <p className="text-xs text-white/30 font-medium">© 2026 ConsensusAI Technologies. All rights reserved.</p>
                         <p className="text-[10px] text-white/20 uppercase tracking-widest font-bold">Pure Data • No Noise</p>
                     </div>
                 </footer>
@@ -1086,7 +1086,7 @@ export default function StockDashboard({ initialTicker, onBack }) {
                                     <p className="font-medium text-white/80">
                                         {!user
                                             ? "Create a 100% free account today to get your first full AI analysis on the house."
-                                            : "You've used your free analysis. Upgrade to QuantAI Pro for unlimited scans, live market vectors, and real-time agent debates."}
+                                            : "You've used your free analysis. Upgrade to ConsensusAI Pro for unlimited scans, live market vectors, and real-time agent debates."}
                                     </p>
                                 </div>
 

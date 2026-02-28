@@ -323,11 +323,11 @@ export default function HomeDashboard({ onSearch }) {
                 <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
                     {/* Logo */}
                     <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-full bg-[#00C805]/10 flex items-center justify-center">
-                            <Activity className="w-4 h-4 text-[#00C805]" />
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center">
+                            <img src="/logo.svg" alt="ConsensusAI Logo" className="w-full h-full object-contain" />
                         </div>
                         <span className="font-bold text-lg tracking-tight text-white">
-                            Quant<span className="text-[#00C805]">AI</span>
+                            Consensus<span className="text-[#00C805]">AI</span>
                         </span>
                     </div>
 
@@ -736,10 +736,10 @@ export default function HomeDashboard({ onSearch }) {
             >
                 <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                     <div className="flex items-center gap-2">
-                        <Activity className="w-3.5 h-3.5 text-white/20" />
-                        <span className="text-xs text-white/20 font-semibold">QuantAI</span>
+                        <img src="/logo.svg" className="w-3.5 h-3.5" />
+                        <span className="text-xs text-white/20 font-semibold">ConsensusAI</span>
                     </div>
-                    <p className="text-xs text-white/20">© 2026 QuantAI Technologies. For informational purposes only. Not financial advice.</p>
+                    <p className="text-xs text-white/20">© 2026 ConsensusAI Technologies. For informational purposes only. Not financial advice.</p>
                     <p className="text-[10px] text-white/15 uppercase tracking-widest font-bold">Pure Data · No Noise</p>
                 </div>
             </footer>
