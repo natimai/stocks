@@ -176,11 +176,29 @@ export default function HomeDashboard({ onSearch }) {
     const [livePicks, setLivePicks] = useState(null);   // null = loading
     const [liveScans, setLiveScans] = useState(null);
     const [user, setUser] = useState(null);
+    const [userProfile, setUserProfile] = useState(null);
 
-    // Track Auth State
+    // Track Auth State and fetch profile
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
             setUser(currentUser);
+            if (currentUser) {
+                try {
+                    const token = await currentUser.getIdToken();
+                    const res = await fetch(
+                        `https://quantai-backend-316459358121.europe-west1.run.app/api/user-profile`,
+                        { headers: { Authorization: `Bearer ${token}` } }
+                    );
+                    if (res.ok) {
+                        const profile = await res.json();
+                        setUserProfile(profile);
+                    }
+                } catch (e) {
+                    // Ignore errors
+                }
+            } else {
+                setUserProfile(null);
+            }
         });
         return () => unsubscribe();
     }, []);
@@ -340,7 +358,20 @@ export default function HomeDashboard({ onSearch }) {
                                             </div>
                                         )}
                                     </div>
-                                    <span className="hidden sm:inline text-white/80">{user.displayName}</span>
+                                    <div className="flex flex-col">
+                                        <span className="hidden sm:inline text-sm text-white/80 font-medium">
+                                            {user.displayName || user.email?.split('@')[0]}
+                                        </span>
+                                        {userProfile && (
+                                            <span className="hidden sm:inline text-[10px] text-white/40 tracking-wide uppercase font-bold mt-0.5">
+                                                {userProfile.isPro ? (
+                                                    <span className="text-[#00C805]">PRO</span>
+                                                ) : (
+                                                    <span>Free ({Math.min(userProfile.analysisCount || 0, 1)}/1)</span>
+                                                )}
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                                 <button
                                     onClick={handleLogout}
