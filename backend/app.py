@@ -101,6 +101,52 @@ app.add_middleware(
 def read_root():
     return {"message": "Welcome to the SaaS Stock Analysis API. Use /api/analyze/{ticker} to get real-time scores."}
 
+# ── ADMIN MIDDLEWARE ──────────────────────────────────────────────────────────
+ADMIN_EMAILS = {"netanel18999@gmail.com"}  # Add more admin emails here if needed
+
+def verify_admin(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Only allows requests from admin-level accounts."""
+    try:
+        token = credentials.credentials
+        decoded = auth.verify_id_token(token)
+        email = decoded.get('email', '')
+        if email not in ADMIN_EMAILS:
+            raise HTTPException(status_code=403, detail="Admin access required.")
+        return decoded
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token.")
+
+@app.get("/api/admin/users")
+def list_users(admin=Depends(verify_admin)):
+    """Returns all registered users from Firestore."""
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database not available.")
+    users = []
+    for doc in db.collection('users').stream():
+        d = doc.to_dict()
+        d['uid'] = doc.id
+        # Convert Firestore timestamp to ISO string if present
+        if 'createdAt' in d and hasattr(d['createdAt'], 'isoformat'):
+            d['createdAt'] = d['createdAt'].isoformat()
+        users.append(d)
+    return users
+
+class AdminUserUpdate(BaseModel):
+    isPro: bool
+
+@app.patch("/api/admin/users/{uid}")
+def update_user(uid: str, body: AdminUserUpdate, admin=Depends(verify_admin)):
+    """Toggle a user's Pro status."""
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database not available.")
+    user_ref = db.collection('users').document(uid)
+    if not user_ref.get().exists:
+        raise HTTPException(status_code=404, detail="User not found.")
+    user_ref.update({'isPro': body.isPro})
+    return {"success": True, "uid": uid, "isPro": body.isPro}
+
 @app.get("/api/user-profile")
 def get_user_profile(user_data: dict = Depends(verify_token_and_check_limit)):
     """Returns the current user's profile (isPro, analysisCount, autoAnalysis)."""
