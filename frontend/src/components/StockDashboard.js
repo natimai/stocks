@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     Activity, ArrowLeft,
     TrendingUp, TrendingDown, Clock, Search, Briefcase, Zap, AlertTriangle, CheckCircle2,
-    LayoutDashboard, ScanLine, User, LogOut, Lock, Star
+    LayoutDashboard, ScanLine, User, LogOut, Lock, Star, CheckCheck, Plus, Mic, Send
 } from 'lucide-react';
 import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
 import CommandPalette from './CommandPalette';
@@ -473,12 +473,48 @@ export default function StockDashboard({ initialTicker, onBack }) {
         { subject: 'MAC', value: sub.Macro_Risk || 0 },
     ] : [];
 
-    // Debate Agents Array for sequential rendering
+    // Debate Agents Array for WhatsApp/iMessage styles
     const debateAgents = [
-        { key: 'bull', icon: '🐂', name: 'The Bull', role: 'Fundamental Value', text: liveDebate.bull },
-        { key: 'bear', icon: '🐻', name: 'The Bear', role: 'Macro Risk', text: liveDebate.bear },
-        { key: 'quant', icon: '🤖', name: 'The Quant', role: 'Technical Momentum', text: liveDebate.quant },
-        { key: 'cio', icon: '⚖️', name: 'The CIO', role: 'Chief Investment Officer', text: liveDebate.cio || (sub ? (display.summary || "Debate Concluded.") : "") }
+        {
+            key: 'bull',
+            avatar: '/avatars/The Bull.svg',
+            name: 'The Bull',
+            nameColor: 'text-emerald-500', // Emerald Green
+            align: 'left',
+            bubbleClass: 'bg-[#1E1E24] rounded-2xl rounded-tl-sm text-white/90',
+            text: liveDebate.bull,
+            time: '10:41 AM'
+        },
+        {
+            key: 'bear',
+            avatar: '/avatars/bear.svg',
+            name: 'The Bear',
+            nameColor: 'text-red-400', // Coral Red
+            align: 'left',
+            bubbleClass: 'bg-[#1E1E24] rounded-2xl rounded-tl-sm text-white/90',
+            text: liveDebate.bear,
+            time: '10:42 AM'
+        },
+        {
+            key: 'quant',
+            avatar: '/avatars/The Quant.svg',
+            name: 'The Quant',
+            nameColor: 'text-cyan-400', // Cyan/Blue
+            align: 'left',
+            bubbleClass: 'bg-[#1E1E24] rounded-2xl rounded-tl-sm text-white/90',
+            text: liveDebate.quant,
+            time: '10:44 AM'
+        },
+        {
+            key: 'cio',
+            avatar: '/avatars/The CIO Agent.svg',
+            name: 'The CIO',
+            nameColor: 'text-white/80',
+            align: 'right', // Right Aligned (like user's msg on WhatsApp)
+            bubbleClass: 'bg-[#005C4B] rounded-2xl rounded-tr-sm text-white',
+            text: liveDebate.cio || (sub ? (display.summary || "Debate Concluded.") : ""),
+            time: '10:45 AM'
+        }
     ];
 
     return (
@@ -884,64 +920,101 @@ export default function StockDashboard({ initialTicker, onBack }) {
                     </motion.section>
                 )}
 
-                {/* ── SECTION 5: AI AGENTS DEBATE ROOM ── */}
-                <section className="pt-8 border-t border-[#1E1E24]">
-                    <div className="mb-8">
-                        <h2 className="text-2xl font-semibold tracking-tight">AI Debate Thread</h2>
-                        <p className="text-sm text-white/50 mt-1">Live synthesis from 4 autonomous specialist agents.</p>
+                {/* ── SECTION 5: AI AGENTS DEBATE ROOM (Chat Interface) ── */}
+                <section className="pt-12 sm:pt-16 max-w-2xl mx-auto w-full">
+                    <div className="mb-6 text-center">
+                        <h2 className="text-2xl font-semibold tracking-tight">AI Strategy Committee</h2>
+                        <p className="text-sm text-white/50 mt-1">Live synthesis from autonomous specialist agents.</p>
                     </div>
 
-                    <div className="space-y-8 pl-2 border-l border-[#1E1E24]/50 ml-4 pb-8">
-                        <AnimatePresence>
-                            {debateAgents.map((agent, i) => {
-                                if (!agent.text) return null; // Only render if agent has spoken
+                    <div className="bg-[#0B141A] sm:rounded-3xl overflow-hidden shadow-2xl flex flex-col h-[700px] border border-white/5 relative">
+                        {/* Chat Header */}
+                        <div className="bg-[#202C33] px-4 py-3 flex items-center gap-3 shadow-md z-10 shrink-0">
+                            <div className="w-10 h-10 rounded-full bg-[#111114] flex items-center justify-center shrink-0 border border-white/10 relative overflow-hidden">
+                                <img src="/avatars/The Bull.svg" alt="" className="absolute top-0 left-0 w-[55%] h-[55%] object-cover" />
+                                <img src="/avatars/The CIO Agent.svg" alt="" className="absolute bottom-0 right-0 w-[55%] h-[55%] object-cover" />
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-white/90 font-medium text-[15px]">Quant Strategy Committee</span>
+                                <span className="text-white/50 text-[13px]">4 participants</span>
+                            </div>
+                        </div>
 
-                                return (
-                                    <motion.div
-                                        key={agent.key}
-                                        initial={{ opacity: 0, y: 20 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        transition={{ duration: 0.5, ease: "easeOut" }}
-                                        className="relative pl-8"
-                                    >
-                                        {/* Connector Line */}
-                                        <div className="absolute top-4 -left-[0.5px] w-6 border-t border-[#1E1E24]/50"></div>
-                                        <div className="absolute -left-4 sm:-left-3 top-2 sm:top-2.5 bg-[#1E1E24] w-8 h-8 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-xs sm:text-[10px] md:text-xs">
-                                            {agent.icon}
-                                        </div>
+                        {/* Chat Messages */}
+                        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-5" style={{ backgroundImage: 'radial-gradient(circle at center, #111b21 0%, #0b141a 100%)' }}>
+                            <AnimatePresence>
+                                {debateAgents.map((agent, i) => {
+                                    if (!agent.text) return null; // Only render if agent has spoken
+                                    const isRight = agent.align === 'right';
 
-                                        <div className="bg-[#1E1E24] rounded-2xl rounded-tl-sm p-4 sm:p-5 inline-block max-w-[95%] sm:max-w-[85%] md:max-w-[80%]">
-                                            <div className="flex items-baseline gap-2 mb-1.5 flex-wrap">
-                                                <span className="text-sm font-bold text-white/90">{agent.name}</span>
-                                                <span className="text-[10px] sm:text-xs font-medium text-white/40 uppercase tracking-widest">{agent.role}</span>
+                                    return (
+                                        <motion.div
+                                            key={agent.key}
+                                            initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                                            transition={{ duration: 0.35, delay: i * 0.15, ease: "easeOut" }}
+                                            className={`flex gap-2.5 w-full ${isRight ? 'justify-end' : 'justify-start'}`}
+                                        >
+                                            {!isRight && (
+                                                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full overflow-hidden shrink-0 mt-auto mb-1">
+                                                    <img src={agent.avatar} alt={agent.name} className="w-full h-full object-cover" />
+                                                </div>
+                                            )}
+
+                                            <div className={`flex flex-col max-w-[85%] sm:max-w-[75%] ${isRight ? 'items-end' : 'items-start'}`}>
+                                                {!isRight && (
+                                                    <span className={`text-[12px] font-semibold mb-1 ml-1 ${agent.nameColor}`}>
+                                                        {agent.name}
+                                                    </span>
+                                                )}
+
+                                                <div className={`relative px-3 sm:px-3.5 py-2 shadow-sm ${agent.bubbleClass}`}>
+                                                    <p className="text-[14px] sm:text-[15px] leading-[1.35] whitespace-pre-wrap">{agent.text}</p>
+                                                    <div className={`flex items-center gap-1 mt-1 ${isRight ? 'justify-end mr-0' : 'justify-end -mr-1'}`}>
+                                                        <span className="text-[10px] text-white/50">{agent.time}</span>
+                                                        {isRight && <CheckCheck className="w-3.5 h-3.5 text-[#53bdeb] ml-0.5" />}
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <p className="text-[14px] sm:text-[15px] leading-relaxed text-white/80">
-                                                {agent.text}
-                                            </p>
+                                        </motion.div>
+                                    );
+                                })}
+
+                                {/* Stream Loading Indicator (Typing) */}
+                                {loading && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        className="flex gap-2.5 w-full justify-start mt-2"
+                                    >
+                                        <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full overflow-hidden shrink-0 mt-auto mb-1 opacity-50">
+                                            <div className="w-full h-full bg-[#202C33] flex items-center justify-center">
+                                                <Activity className="w-3.5 h-3.5 text-emerald-500/50" />
+                                            </div>
+                                        </div>
+                                        <div className="bg-[#202C33] rounded-2xl rounded-bl-sm px-4 py-2.5 inline-flex items-center gap-1.5 shadow-sm self-end">
+                                            <span className="w-1.5 h-1.5 bg-emerald-500/80 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                                            <span className="w-1.5 h-1.5 bg-emerald-500/80 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                                            <span className="w-1.5 h-1.5 bg-emerald-500/80 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
                                         </div>
                                     </motion.div>
-                                );
-                            })}
+                                )}
+                            </AnimatePresence>
+                        </div>
 
-                            {/* Stream Loading Indicator */}
-                            {loading && (
-                                <motion.div
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    className="relative pl-8"
-                                >
-                                    <div className="absolute top-4 -left-[0.5px] w-6 border-t border-[#1E1E24]/50"></div>
-                                    <div className="bg-[#1E1E24] rounded-2xl rounded-tl-sm px-5 py-3 inline-flex items-center gap-3">
-                                        <div className="flex gap-1">
-                                            <span className="w-1.5 h-1.5 bg-white/40 rounded-full animate-bounce delay-75"></span>
-                                            <span className="w-1.5 h-1.5 bg-white/40 rounded-full animate-bounce delay-150"></span>
-                                            <span className="w-1.5 h-1.5 bg-white/40 rounded-full animate-bounce delay-300"></span>
-                                        </div>
-                                        <span className="text-xs font-medium text-white/40 uppercase tracking-widest">{streamMsg}</span>
-                                    </div>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
+                        {/* Faux Input Area */}
+                        <div className="bg-[#202C33] px-3 py-3 flex items-center gap-2 sm:gap-3 shrink-0">
+                            <button className="p-1.5 text-white/40 hover:text-white transition-colors">
+                                <Plus className="w-6 h-6" />
+                            </button>
+                            <div className="flex-1 bg-[#2A3942] rounded-full px-4 py-2 sm:py-2.5 text-[14px] sm:text-[15px] text-white/40 border border-transparent shadow-inner">
+                                <span className="select-none">Type a prompt to interject...</span>
+                            </div>
+                            <button className="p-1.5 text-white/40 hover:text-white transition-colors">
+                                <Mic className="w-5 h-5 sm:w-6 sm:h-6" />
+                            </button>
+                        </div>
+
                     </div>
                 </section>
 
