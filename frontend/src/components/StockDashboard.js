@@ -530,7 +530,20 @@ export default function StockDashboard({ initialTicker, onBack }) {
                                             </div>
                                         )}
                                     </div>
-                                    <span className="hidden sm:inline text-white/80">{user.displayName}</span>
+                                    <div className="flex flex-col">
+                                        <span className="hidden sm:inline text-sm text-white/80 font-medium">
+                                            {user.displayName || user.email?.split('@')[0]}
+                                        </span>
+                                        {userProfile && (
+                                            <span className="hidden sm:inline text-[10px] text-white/40 tracking-wide uppercase font-bold mt-0.5">
+                                                {userProfile.isPro ? (
+                                                    <span className="text-[#00C805]">PRO PLAN</span>
+                                                ) : (
+                                                    <span>Free Plan - {Math.min(userProfile.analysisCount || 0, 1)}/1 Used</span>
+                                                )}
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                                 <button
                                     onClick={handleLogout}

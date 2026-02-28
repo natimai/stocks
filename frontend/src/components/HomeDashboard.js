@@ -365,9 +365,9 @@ export default function HomeDashboard({ onSearch }) {
                                         {userProfile && (
                                             <span className="hidden sm:inline text-[10px] text-white/40 tracking-wide uppercase font-bold mt-0.5">
                                                 {userProfile.isPro ? (
-                                                    <span className="text-[#00C805]">PRO</span>
+                                                    <span className="text-[#00C805]">PRO PLAN</span>
                                                 ) : (
-                                                    <span>Free ({Math.min(userProfile.analysisCount || 0, 1)}/1)</span>
+                                                    <span>Free Plan - {Math.min(userProfile.analysisCount || 0, 1)}/1 Used</span>
                                                 )}
                                             </span>
                                         )}
