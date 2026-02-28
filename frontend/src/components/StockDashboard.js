@@ -671,11 +671,40 @@ export default function StockDashboard({ initialTicker, onBack }) {
                             </div>
                         </div>
                     ) : (
-                        (loading || streamMsg.includes('Error')) && (
+                        (loading || streamMsg.includes('Error')) ? (
                             <div className={`flex flex-col items-start md:items-end ${!loading ? 'opacity-80' : 'opacity-50'}`}>
                                 <Activity className={`w-12 h-12 mb-4 ${loading ? 'animate-pulse' : ''}`} style={{ color: loading ? TREND_COLOR : '#FF5000' }} />
                                 <div className={`text-xs font-medium uppercase tracking-widest max-w-[200px] text-left md:text-right ${loading ? 'text-white/50 animate-pulse' : 'text-[#FF5000]'}`}>
                                     {streamMsg || 'AI Calculating...'}
+                                </div>
+                            </div>
+                        ) : (
+                            // Locked State for Score
+                            <div className="flex flex-col items-start md:items-end w-full md:w-auto mt-6 md:mt-0 relative group">
+                                {/* Blurred Fake Score */}
+                                <div className="text-[64px] md:text-[80px] leading-none font-bold tracking-tighter text-white/10 blur-[8px] select-none pointer-events-none transition-all group-hover:blur-[12px]">
+                                    85
+                                </div>
+                                <div className="flex items-center gap-2 sm:gap-3 mt-2 pr-1 opacity-20 blur-[3px] select-none pointer-events-none">
+                                    <span className="text-xs sm:text-sm font-medium text-white/40 uppercase tracking-widest">AI Score</span>
+                                    <div className="px-3 md:px-4 py-1.5 rounded-full text-[10px] md:text-xs font-bold tracking-widest uppercase shrink-0 bg-white/20 text-black">
+                                        BUY
+                                    </div>
+                                </div>
+                                {/* Unlock Overlay */}
+                                <div className="absolute inset-0 flex flex-col items-center justify-center z-10 md:translate-x-4">
+                                    <div className="w-10 h-10 bg-[#1A1A1E] rounded-full flex items-center justify-center mb-3 shadow-[0_0_30px_rgba(0,0,0,1)] border border-white/10 group-hover:bg-[#202024] transition-colors">
+                                        <Lock className="w-4 h-4 text-white/50" />
+                                    </div>
+                                    {!user ? (
+                                        <button onClick={handleGoogleLogin} className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest bg-[#00C805] text-black px-4 py-2 rounded-full hover:scale-105 transition-transform shadow-[0_0_15px_rgba(0,200,5,0.3)]">
+                                            Unlock Score
+                                        </button>
+                                    ) : (
+                                        <button onClick={() => runAiAnalysis(ticker)} className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest bg-[#00C805] text-black px-4 py-2 rounded-full hover:scale-105 transition-transform shadow-[0_0_15px_rgba(0,200,5,0.3)]">
+                                            Run Analysis
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         )
@@ -874,52 +903,6 @@ export default function StockDashboard({ initialTicker, onBack }) {
                     </section>
                 )}
 
-                {/* ── AI ANALYSIS CTA ── shown when market data is loaded and AI hasn't been triggered */}
-                {data && !aiStarted && !showPaywall && (
-                    <motion.section
-                        initial={{ opacity: 0, y: 16 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="pt-8 border-t border-[#1E1E24]"
-                    >
-                        <div className="bg-[#111114] border border-[#00C805]/20 rounded-3xl p-8 md:p-10 text-center relative overflow-hidden">
-                            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-32 bg-[#00C805]/8 blur-[50px] pointer-events-none" />
-                            <Zap className="w-8 h-8 text-[#00C805] mx-auto mb-4 relative z-10" />
-                            <h3 className="text-2xl font-bold text-white mb-2 relative z-10">Run AI Analysis</h3>
-                            <p className="text-white/50 text-sm mb-6 max-w-md mx-auto relative z-10">
-                                Our multi-agent AI framework — built on hundreds of financial studies — will debate the bull, bear, quant, and macro case for <strong className="text-white/80">{ticker}</strong>.
-                            </p>
-                            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 relative z-10">
-                                {!user ? (
-                                    <button
-                                        onClick={handleGoogleLogin}
-                                        className="flex items-center gap-2 px-8 py-3.5 rounded-xl bg-[#00C805] hover:bg-[#00e005] text-black font-bold text-base transition-all shadow-[0_0_20px_rgba(0,200,5,0.2)] hover:shadow-[0_0_30px_rgba(0,200,5,0.35)] hover:scale-[1.03]"
-                                    >
-                                        <Zap className="w-4 h-4" /> Sign in for 1 Free Analysis
-                                    </button>
-                                ) : (
-                                    <button
-                                        onClick={() => runAiAnalysis(ticker)}
-                                        className="flex items-center gap-2 px-8 py-3.5 rounded-xl bg-[#00C805] hover:bg-[#00e005] text-black font-bold text-base transition-all shadow-[0_0_20px_rgba(0,200,5,0.2)] hover:shadow-[0_0_30px_rgba(0,200,5,0.35)] hover:scale-[1.03]"
-                                    >
-                                        <Zap className="w-4 h-4" /> Start AI Analysis
-                                    </button>
-                                )}
-                                {user && userProfile?.isPro && (
-                                    <span className="text-xs text-white/30 flex items-center gap-1">
-                                        <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
-                                        Pro — Unlimited
-                                    </span>
-                                )}
-                                {user && !userProfile?.isPro && (
-                                    <span className="text-xs text-white/30">
-                                        {1 - (userProfile?.analysisCount || 0)} free analysis remaining
-                                    </span>
-                                )}
-                            </div>
-                        </div>
-                    </motion.section>
-                )}
-
                 {/* ── SECTION 5: AI AGENTS DEBATE ROOM (Chat Interface) ── */}
                 <section className="pt-12 sm:pt-16 max-w-2xl mx-auto w-full">
                     <div className="mb-6 text-center">
@@ -940,8 +923,49 @@ export default function StockDashboard({ initialTicker, onBack }) {
                             </div>
                         </div>
 
-                        {/* Chat Messages */}
-                        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-5" style={{ backgroundImage: 'radial-gradient(circle at center, #111b21 0%, #0b141a 100%)' }}>
+                        {/* Chat Messages / Body */}
+                        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-5 relative" style={{ backgroundImage: 'radial-gradient(circle at center, #111b21 0%, #0b141a 100%)' }}>
+
+                            {/* LOCKED STATE - SHOW IF NO DATA/ANALYSIS COMING IN YET */}
+                            {(!loading && !sub) && (
+                                <>
+                                    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-6 text-center bg-[#0B141A]/70 backdrop-blur-[6px]">
+                                        <div className="w-16 h-16 bg-[#202C33] rounded-full flex items-center justify-center mb-5 shadow-2xl border border-white/10">
+                                            <Lock className="w-7 h-7 text-white/40" />
+                                        </div>
+                                        <h3 className="text-2xl font-bold text-white mb-3">Unlock AI Debate Room</h3>
+                                        <p className="text-white/50 text-[15px] mb-8 max-w-sm leading-relaxed">
+                                            Watch our multi-agent framework debate the fundamental, technical, and macro case for <strong className="text-white/80">{ticker}</strong> in real-time.
+                                        </p>
+                                        <div className="flex flex-col gap-3 w-full max-w-[240px]">
+                                            {!user ? (
+                                                <button onClick={handleGoogleLogin} className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-[#00C805] hover:bg-[#00e005] text-black font-bold text-[15px] transition-all shadow-[0_0_20px_rgba(0,200,5,0.2)] hover:scale-[1.03]">
+                                                    <Zap className="w-4 h-4" /> Sign In to Access
+                                                </button>
+                                            ) : (
+                                                <button onClick={() => runAiAnalysis(ticker)} className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-[#00C805] hover:bg-[#00e005] text-black font-bold text-[15px] transition-all shadow-[0_0_20px_rgba(0,200,5,0.2)] hover:scale-[1.03]" disabled={showPaywall}>
+                                                    <Zap className="w-4 h-4" /> Start Live Debate
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Blurred Dummy Chat Layout behind the lock */}
+                                    <div className="space-y-6 opacity-[0.15] blur-sm pointer-events-none select-none overflow-hidden h-full mt-4">
+                                        <div className="flex gap-2.5 w-full justify-start">
+                                            <div className="w-8 h-8 rounded-full bg-emerald-500/50 mt-auto mb-1 shrink-0"></div>
+                                            <div className="bg-[#1E1E24] rounded-2xl rounded-tl-sm p-4 w-56 h-20"></div>
+                                        </div>
+                                        <div className="flex gap-2.5 w-full justify-start">
+                                            <div className="w-8 h-8 rounded-full bg-red-400/50 mt-auto mb-1 shrink-0"></div>
+                                            <div className="bg-[#1E1E24] rounded-2xl rounded-tl-sm p-4 w-72 h-28"></div>
+                                        </div>
+                                        <div className="flex gap-2.5 w-full justify-end mt-8">
+                                            <div className="bg-[#005C4B] rounded-2xl rounded-tr-sm p-4 w-64 h-24"></div>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
                             <AnimatePresence>
                                 {debateAgents.map((agent, i) => {
                                     if (!agent.text) return null; // Only render if agent has spoken
