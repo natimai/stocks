@@ -151,6 +151,7 @@ export default function StockDashboard({ initialTicker, onBack }) {
     const [showPaywall, setShowPaywall] = useState(false);
     const [userProfile, setUserProfile] = useState(null); // { isPro, autoAnalysis, analysisCount }
     const [aiStarted, setAiStarted] = useState(false);    // has AI analysis been kicked off this session
+    const [pendingTicker, setPendingTicker] = useState(null); // queued ticker while auth resolves
 
     // Track Auth State + fetch user profile from Firestore
     useEffect(() => {
