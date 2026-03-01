@@ -170,23 +170,40 @@ def get_user_profile(user_data: dict = Depends(verify_token)):
             "isPro": d.get('isPro', False),
             "analysisCount": d.get('analysisCount', 0),
             "autoAnalysis": d.get('autoAnalysis', False),
+            "customPicks": d.get('customPicks', ["NVDA", "AAPL", "META", "TSLA", "MSFT"])
         }
-    return {"uid": user_data['uid'], "isPro": False, "analysisCount": 0, "autoAnalysis": False}
+    return {
+        "uid": user_data['uid'], 
+        "isPro": False, 
+        "analysisCount": 0, 
+        "autoAnalysis": False,
+        "customPicks": ["NVDA", "AAPL", "META", "TSLA", "MSFT"]
+    }
 
 class UserSettings(BaseModel):
     autoAnalysis: Optional[bool] = None
+    customPicks: Optional[list[str]] = None
 
 @app.patch("/api/user-settings")
 def update_user_settings(settings: UserSettings, user_data: dict = Depends(verify_token_and_check_limit)):
-    """Allows Pro users to update their profile settings (e.g., autoAnalysis)."""
+    """Allows Pro users to update their profile settings (e.g., autoAnalysis, custom picks)."""
     user_ref = user_data['user_ref']
     updates = {}
-    # Only Pro users can set autoAnalysis
+    
     if settings.autoAnalysis is not None:
         if user_data.get('isPro'):
             updates['autoAnalysis'] = settings.autoAnalysis
         else:
             raise HTTPException(status_code=403, detail="Auto-analysis is a Pro feature.")
+            
+    if settings.customPicks is not None:
+        if user_data.get('isPro'):
+            # Validate they are strings and limit to 5
+            picks = [str(p).upper().strip() for p in settings.customPicks][:5]
+            updates['customPicks'] = picks
+        else:
+            raise HTTPException(status_code=403, detail="Custom top picks is a Pro feature.")
+
     if updates:
         user_ref.update(updates)
     return {"success": True}
@@ -524,11 +541,6 @@ def delete_portfolio_item(item_id: str, user_data: dict = Depends(verify_token))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-if __name__ == "__main__":
-    # Start the application using Uvicorn
-    # Make sure analysis_engine.py is in the same directory or Python path!
-    # Run server via: python app.py
-    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
 @app.get("/api/quick-stats/{ticker}")
 def get_quick_stats(ticker: str):
     import pandas as pd
@@ -542,10 +554,7 @@ def get_quick_stats(ticker: str):
             
         change_pct = info.get("regularMarketChangePercent", None)
         if change_pct is not None:
-            # yfinance returns regularMarketChangePercent as a decimal (e.g. 0.012 = 1.2%)
-            # Multiply by 100 to get a proper percentage value
             change_pct = change_pct * 100
-            # Sanity check: if result is unreasonably large, recalculate from price history
             if abs(change_pct) > 25:
                 if len(hist) > 1:
                     prev_close = hist['Close'].iloc[-2]
@@ -559,16 +568,31 @@ def get_quick_stats(ticker: str):
             else:
                 change_pct = 0.0
                 
-        # Optional safe get for metrics
         def safe_get(key, default=None):
             val = info.get(key)
             return default if pd.isna(val) else val
+
+        # Attempt to read REAL AI Score from cache
+        score = None
+        recommendation = None
+        cache_file = os.path.join(CACHE_DIR, f"{ticker.upper()}.json")
+        if os.path.exists(cache_file):
+            try:
+                import json
+                with open(cache_file, "r") as f:
+                    cdata = json.load(f)
+                    score = cdata.get("score")
+                    recommendation = cdata.get("recommendation")
+            except:
+                pass
 
         return {
             "ticker": ticker.upper(),
             "name": info.get("shortName", info.get("longName", ticker)),
             "price": current_price,
             "changePercent": change_pct,
+            "score": score,
+            "recommendation": recommendation,
             "market_cap": safe_get("marketCap", 0),
             "metrics": {
                 "pe_ratio": safe_get("trailingPE"),
@@ -578,3 +602,8 @@ def get_quick_stats(ticker: str):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+if __name__ == "__main__":
+    import uvicorn
+    # Start the application using Uvicorn
+    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)

@@ -179,6 +179,9 @@ export default function HomeDashboard({ onSearch }) {
     const [user, setUser] = useState(null);
     const [userProfile, setUserProfile] = useState(null);
     const [showPortfolio, setShowPortfolio] = useState(false);
+    const [isEditingPicks, setIsEditingPicks] = useState(false);
+    const [editPicksInput, setEditPicksInput] = useState('');
+    const [isSavingPicks, setIsSavingPicks] = useState(false);
 
     // Track Auth State and fetch profile
     useEffect(() => {
@@ -221,20 +224,26 @@ export default function HomeDashboard({ onSearch }) {
         }
     };
 
-    // Fetch live prices for cards on mount
+    // Fetch live prices for cards
     useEffect(() => {
         const fetchAll = async () => {
+            // Determine which tickers to fetch: user customPicks or default TOP_PICKS_TICKERS
+            const tickersToFetch = (userProfile?.customPicks && userProfile.customPicks.length > 0)
+                ? userProfile.customPicks.map(t => ({ ticker: t, name: t }))
+                : TOP_PICKS_TICKERS;
+
             try {
                 // Fetch Top Picks
                 const pickResults = await Promise.all(
-                    TOP_PICKS_TICKERS.map(async ({ ticker, name }) => {
+                    tickersToFetch.map(async ({ ticker, name }) => {
                         try {
                             const res = await fetch(`https://quantai-backend-316459358121.europe-west1.run.app/api/quick-stats/${ticker}`);
                             if (!res.ok) throw new Error('fail');
                             const d = await res.json();
                             const isUp = (d.changePercent ?? 0) >= 0;
-                            // Build a rough sparkline from chartData if available
                             const spark = (d.chartData || []).slice(-12).map(c => c.close);
+
+                            // Real AI Score from backend if available, else default 70
                             return {
                                 ticker,
                                 name: d.name || name,
@@ -277,7 +286,7 @@ export default function HomeDashboard({ onSearch }) {
             }
         };
         fetchAll();
-    }, []);
+    }, [userProfile?.customPicks]); // Re-fetch when custom picks change
 
     // Skeleton shimmer card shown while loading
     const SkeletonCard = ({ i }) => (
@@ -294,6 +303,31 @@ export default function HomeDashboard({ onSearch }) {
 
     const displayPicks = livePicks ?? TOP_PICKS_TICKERS.map(t => ({ ...t, price: null, change: 0, score: 70, signal: 'BUY', sparkline: [] }));
     const displayScans = liveScans ?? RECENT_SCANS_TICKERS.map((t, i) => ({ ticker: t, price: null, score: 70, signal: 'BUY', ago: `${(i + 1) * 3} mins ago` }));
+
+    const handleSavePicks = async () => {
+        if (!user || !userProfile?.isPro) return;
+        setIsSavingPicks(true);
+        try {
+            const tickers = editPicksInput.split(',').map(s => s.trim().toUpperCase()).filter(s => s.length > 0).slice(0, 5);
+            const token = await user.getIdToken();
+            const res = await fetch(`https://quantai-backend-316459358121.europe-west1.run.app/api/user-settings`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ customPicks: tickers })
+            });
+            if (res.ok) {
+                setUserProfile(prev => ({ ...prev, customPicks: tickers }));
+                setIsEditingPicks(false);
+            }
+        } catch (e) {
+            console.error('Failed to save picks', e);
+        } finally {
+            setIsSavingPicks(false);
+        }
+    };
 
     const handleSubmit = useCallback((e) => {
         e?.preventDefault();
@@ -548,6 +582,45 @@ export default function HomeDashboard({ onSearch }) {
                                         Trending AI Insights
                                     </span>
                                 </div>
+                                {userProfile?.isPro && (
+                                    <div className="flex items-center gap-2">
+                                        {isEditingPicks ? (
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="text"
+                                                    value={editPicksInput}
+                                                    onChange={(e) => setEditPicksInput(e.target.value)}
+                                                    placeholder="AAPL, NVDA, TSLA..."
+                                                    className="bg-black/50 border border-white/10 rounded-lg px-3 py-1 text-xs text-white focus:outline-none focus:border-[#00C805]/50 w-40"
+                                                />
+                                                <button
+                                                    onClick={handleSavePicks}
+                                                    disabled={isSavingPicks}
+                                                    className="text-[10px] font-bold text-[#00C805] hover:underline uppercase"
+                                                >
+                                                    {isSavingPicks ? 'Saving...' : 'Save'}
+                                                </button>
+                                                <button
+                                                    onClick={() => setIsEditingPicks(false)}
+                                                    className="text-[10px] font-bold text-white/40 hover:text-white uppercase"
+                                                >
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <button
+                                                onClick={() => {
+                                                    setEditPicksInput((userProfile?.customPicks || ["NVDA", "AAPL", "META", "TSLA", "MSFT"]).join(', '));
+                                                    setIsEditingPicks(true);
+                                                }}
+                                                className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/40 hover:text-white transition-colors"
+                                                title="Edit Top Picks"
+                                            >
+                                                <Activity className="w-3.5 h-3.5" />
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
                                 <button className="text-xs text-white/30 hover:text-white/70 transition-colors flex items-center gap-1">
                                     View all <ChevronRight className="w-3 h-3" />
                                 </button>
