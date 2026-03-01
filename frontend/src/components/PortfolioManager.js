@@ -447,18 +447,18 @@ export default function PortfolioManager() {
 
                                                 {/* Hover Trash / Edit Icon */}
                                                 {editingId !== item.id && (
-                                                    <div className="absolute right-6 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-end pl-12 h-full gap-2 z-10 pointer-events-none">
-                                                        <div className="pointer-events-auto flex items-center justify-center translate-x-3 group-hover:translate-x-0 transition-transform bg-gradient-to-l from-[#111114] via-[#111114] to-transparent pl-8 h-full space-x-2">
+                                                    <div className="absolute right-2 sm:right-6 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-end pl-12 h-full gap-2 z-10 pointer-events-none">
+                                                        <div className="pointer-events-auto flex items-center justify-center sm:translate-x-3 group-hover:translate-x-0 transition-transform bg-gradient-to-l from-[#111114] via-[#111114] to-transparent pl-8 h-full space-x-1 sm:space-x-2">
                                                             <button
-                                                                onClick={(e) => { e.stopPropagation(); startEditing(item); }}
-                                                                className="p-1.5 rounded-full bg-white/5 hover:bg-white/10 text-white/50 hover:text-white transition-colors"
+                                                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); startEditing(item); }}
+                                                                className="p-2 sm:p-1.5 rounded-full bg-white/10 sm:bg-white/5 hover:bg-white/20 text-white/80 sm:text-white/50 hover:text-white transition-colors"
                                                                 title="Edit"
                                                             >
                                                                 <Edit2 className="w-4 h-4" />
                                                             </button>
                                                             <button
-                                                                onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}
-                                                                className="p-1.5 rounded-full bg-red-500/5 hover:bg-red-500/10 text-red-500/50 hover:text-red-500 transition-colors"
+                                                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(item.id); }}
+                                                                className="p-2 sm:p-1.5 rounded-full bg-red-500/10 sm:bg-red-500/5 hover:bg-red-500/20 text-red-500/80 sm:text-red-500/50 hover:text-red-500 transition-colors"
                                                                 title="Delete"
                                                             >
                                                                 <Trash2 className="w-4 h-4" />
