@@ -31,10 +31,9 @@ except Exception as e:
 
 security = HTTPBearer()
 
-def verify_token_and_check_limit(credentials: HTTPAuthorizationCredentials = Depends(security)):
+def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """
-    Verifies the JWT token and checks if the user has reached their 1 free analysis limit.
-    If they are 'isPro', bypass the limit.
+    Verifies the JWT token and fetches user data from Firestore without applying any paywall limits.
     """
     try:
         token = credentials.credentials
@@ -63,13 +62,6 @@ def verify_token_and_check_limit(credentials: HTTPAuthorizationCredentials = Dep
                 'analysisCount': analysis_count,
                 'createdAt': firestore.SERVER_TIMESTAMP
             })
-
-        # Apply Paywall Rule
-        if not is_pro and analysis_count >= 1:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="PAYWALL_LIMIT_REACHED"
-            )
             
         return {"uid": uid, "user_ref": user_ref, "isPro": is_pro, "analysisCount": analysis_count}
 
@@ -82,6 +74,23 @@ def verify_token_and_check_limit(credentials: HTTPAuthorizationCredentials = Dep
     except Exception as e:
         print(f"Auth error: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Authentication failed")
+
+def verify_token_and_check_limit(user_data: dict = Depends(verify_token)):
+    """
+    Checks if the user has reached their 1 free analysis limit.
+    If they are 'isPro', bypass the limit.
+    """
+    is_pro = user_data.get("isPro", False)
+    analysis_count = user_data.get("analysisCount", 0)
+
+    # Apply Paywall Rule
+    if not is_pro and analysis_count >= 1:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="PAYWALL_LIMIT_REACHED"
+        )
+        
+    return user_data
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -150,7 +159,7 @@ def update_user(uid: str, body: AdminUserUpdate, admin=Depends(verify_admin)):
     return {"success": True, "uid": uid, "isPro": body.isPro}
 
 @app.get("/api/user-profile")
-def get_user_profile(user_data: dict = Depends(verify_token_and_check_limit)):
+def get_user_profile(user_data: dict = Depends(verify_token)):
     """Returns the current user's profile (isPro, analysisCount, autoAnalysis)."""
     user_ref = user_data['user_ref']
     doc = user_ref.get()
@@ -271,7 +280,7 @@ class DoctorChatRequest(BaseModel):
     messages: list
 
 @app.post("/api/portfolio-doctor/chat")
-async def portfolio_doctor_chat(request: DoctorChatRequest, user_data: dict = Depends(verify_token_and_check_limit)):
+async def portfolio_doctor_chat(request: DoctorChatRequest, user_data: dict = Depends(verify_token)):
     if not api_key:
         raise HTTPException(status_code=500, detail="GEMINI_API_KEY is not set.")
         
@@ -416,7 +425,7 @@ Speak directly to the user. Be professional, slightly witty, and highly analytic
     return StreamingResponse(chat_stream(), media_type="text/event-stream")
 
 @app.get("/api/portfolio")
-def get_portfolio(user_data: dict = Depends(verify_token_and_check_limit)):
+def get_portfolio(user_data: dict = Depends(verify_token)):
     """Fetches all holdings for the user."""
     if db is None:
         raise HTTPException(status_code=503, detail="Database not available.")
@@ -435,7 +444,7 @@ def get_portfolio(user_data: dict = Depends(verify_token_and_check_limit)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/portfolio")
-def add_portfolio_item(item: PortfolioItem, user_data: dict = Depends(verify_token_and_check_limit)):
+def add_portfolio_item(item: PortfolioItem, user_data: dict = Depends(verify_token)):
     """Inserts a new holding into the database."""
     if db is None:
         raise HTTPException(status_code=503, detail="Database not available.")
@@ -466,8 +475,39 @@ def add_portfolio_item(item: PortfolioItem, user_data: dict = Depends(verify_tok
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.put("/api/portfolio/{item_id}")
+def update_portfolio_item(item_id: str, item: PortfolioItem, user_data: dict = Depends(verify_token)):
+    """Updates an existing holding in the database."""
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database not available.")
+    uid = user_data["uid"]
+    if item.shares < 0 or item.average_cost < 0:
+        raise HTTPException(status_code=400, detail="Invalid portfolio data")
+
+    try:
+        doc_ref = db.collection('users').document(uid).collection('portfolio').document(item_id)
+        if not doc_ref.get().exists:
+            raise HTTPException(status_code=404, detail="Portfolio item not found")
+            
+        update_data = {
+            'shares': float(item.shares),
+            'average_cost': float(item.average_cost)
+        }
+        doc_ref.update(update_data)
+        
+        return_item = doc_ref.get().to_dict()
+        return_item['id'] = item_id
+        if 'createdAt' in return_item and hasattr(return_item['createdAt'], 'isoformat'):
+            return_item['createdAt'] = return_item['createdAt'].isoformat()
+            
+        return return_item
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.delete("/api/portfolio/{item_id}")
-def delete_portfolio_item(item_id: str, user_data: dict = Depends(verify_token_and_check_limit)):
+def delete_portfolio_item(item_id: str, user_data: dict = Depends(verify_token)):
     """Removes a holding from the database."""
     if db is None:
         raise HTTPException(status_code=503, detail="Database not available.")

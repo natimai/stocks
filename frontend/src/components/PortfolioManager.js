@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trash2, Plus, Layers } from 'lucide-react';
+import { Trash2, Plus, Layers, Edit2, Check, X } from 'lucide-react';
 import { auth } from '../lib/firebase';
 import PortfolioDoctorChat from './PortfolioDoctorChat';
 
@@ -34,6 +34,15 @@ export default function PortfolioManager() {
 
     // Custom Chat State
     const [isChatOpen, setIsChatOpen] = useState(false);
+
+    // Edit State
+    const [editingId, setEditingId] = useState(null);
+    const [editShares, setEditShares] = useState('');
+    const [editAverageCost, setEditAverageCost] = useState('');
+
+    // Autocomplete State
+    const [searchResults, setSearchResults] = useState([]);
+    const [showResults, setShowResults] = useState(false);
 
     const getBaseUrl = () => {
         return typeof window !== 'undefined' && window.location.hostname === 'localhost'
@@ -81,6 +90,33 @@ export default function PortfolioManager() {
         });
         return unsubscribe;
     }, []);
+
+    // Autocomplete hook
+    useEffect(() => {
+        if (ticker.trim().length >= 1) {
+            const timeout = setTimeout(async () => {
+                try {
+                    const res = await fetch(`${getBaseUrl()}/api/search?q=${ticker}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        setSearchResults(data);
+                        setShowResults(data.length > 0);
+                    }
+                } catch (e) {
+                    console.error("Search failed", e);
+                }
+            }, 300);
+            return () => clearTimeout(timeout);
+        } else {
+            setSearchResults([]);
+            setShowResults(false);
+        }
+    }, [ticker]);
+
+    const handleSelectStock = (symbol) => {
+        setTicker(symbol);
+        setShowResults(false);
+    };
 
 
     const fetchPortfolio = async () => {
@@ -177,6 +213,59 @@ export default function PortfolioManager() {
         }
     };
 
+    const startEditing = (item) => {
+        setEditingId(item.id);
+        setEditShares(item.shares.toString());
+        setEditAverageCost(item.average_cost.toString());
+    };
+
+    const cancelEditing = () => {
+        setEditingId(null);
+        setEditShares('');
+        setEditAverageCost('');
+    };
+
+    const handleEditSave = async (id) => {
+        if (!auth.currentUser || !editShares || !editAverageCost) return;
+
+        const previousHoldings = [...holdings];
+        const newShares = parseFloat(editShares);
+        const newAvgCost = parseFloat(editAverageCost);
+
+        // Optimistic edit
+        setHoldings(prev => prev.map(h =>
+            h.id === id ? { ...h, shares: newShares, average_cost: newAvgCost } : h
+        ));
+        setEditingId(null);
+
+        try {
+            const token = await auth.currentUser.getIdToken();
+            const currentItem = previousHoldings.find(h => h.id === id);
+            const res = await fetch(`${getBaseUrl()}/api/portfolio/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    ticker: currentItem.ticker,
+                    shares: newShares,
+                    average_cost: newAvgCost
+                })
+            });
+
+            if (!res.ok) {
+                setHoldings(previousHoldings);
+            } else {
+                const data = await res.json();
+                setHoldings(prev => prev.map(h => h.id === id ? data : h));
+            }
+        } catch (e) {
+            console.error('Update failed', e);
+            setHoldings(previousHoldings);
+        }
+    };
+
     // Calculate totals
     const totalValue = holdings.reduce((sum, h) => sum + (h.shares * (prices[h.ticker] || getMockPrice(h.ticker))), 0);
     const totalCost = holdings.reduce((sum, h) => sum + (h.shares * h.average_cost), 0);
@@ -212,14 +301,38 @@ export default function PortfolioManager() {
 
                     {/* Inline Form */}
                     <form onSubmit={handleAdd} className="flex flex-wrap sm:flex-nowrap items-center gap-3 w-full md:w-auto bg-[#111114] p-2 rounded-2xl border border-white/10 shadow-lg relative z-10">
-                        <input
-                            type="text"
-                            placeholder="TICKER"
-                            value={ticker}
-                            onChange={(e) => setTicker(e.target.value.toUpperCase())}
-                            className="bg-black/50 border border-white/10 rounded-xl px-4 py-2 w-full sm:w-28 text-sm focus:outline-none focus:border-white/30 uppercase placeholder-white/30 font-bold"
-                            required
-                        />
+                        <div className="relative w-full sm:w-28 flex-shrink-0">
+                            <input
+                                type="text"
+                                placeholder="TICKER"
+                                value={ticker}
+                                onChange={(e) => { setTicker(e.target.value.toUpperCase()); setShowResults(true); }}
+                                onBlur={() => setTimeout(() => setShowResults(false), 200)}
+                                className="bg-black/50 border border-white/10 rounded-xl px-4 py-2 w-full text-sm focus:outline-none focus:border-white/30 uppercase placeholder-white/30 font-bold"
+                                required
+                            />
+                            <AnimatePresence>
+                                {showResults && searchResults.length > 0 && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: -5 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -5 }}
+                                        className="absolute top-[calc(100%+8px)] left-0 w-64 bg-[#111114] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50 flex flex-col"
+                                    >
+                                        {searchResults.map((res, i) => (
+                                            <div
+                                                key={i}
+                                                className="px-4 py-2.5 hover:bg-white/10 cursor-pointer flex justify-between items-center transition-colors border-b last:border-0 border-white/5 text-left"
+                                                onClick={() => handleSelectStock(res.symbol)}
+                                            >
+                                                <span className="font-bold text-white text-[13px]">{res.symbol}</span>
+                                                <span className="text-white/40 text-[11px] truncate flex-1 ml-3 text-right">{res.name}</span>
+                                            </div>
+                                        ))}
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
                         <input
                             type="number"
                             step="any"
@@ -293,32 +406,66 @@ export default function PortfolioManager() {
                                                     <div className="col-span-2 sm:col-span-1 font-bold text-white tracking-wide text-lg uppercase">
                                                         {item.ticker}
                                                     </div>
-                                                    <div className="text-right font-medium text-white/90">
-                                                        {item.shares.toLocaleString()}
-                                                    </div>
-                                                    <div className="text-right font-medium text-white/50 hidden sm:block">
-                                                        ${item.average_cost.toFixed(2)}
-                                                    </div>
-                                                    <div className="text-right font-medium text-white/90">
-                                                        ${currentPrice.toFixed(2)}
-                                                    </div>
-                                                    <div className="text-right col-span-2 flex flex-col items-end">
-                                                        <span className="font-bold text-base">${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                                        <span className="text-xs font-semibold mt-0.5 flex items-center gap-1" style={{ color: itemColor }}>
-                                                            {itemIsUp ? '+' : ''}{retPercent.toFixed(2)}%
-                                                        </span>
-                                                    </div>
+                                                    {editingId === item.id ? (
+                                                        <>
+                                                            <div className="col-span-1 text-right">
+                                                                <input type="number" step="any" className="bg-black/50 border border-white/20 rounded px-2 py-1 w-full text-right text-sm focus:outline-none focus:border-white/50 text-white font-medium" value={editShares} onChange={e => setEditShares(e.target.value)} />
+                                                            </div>
+                                                            <div className="col-span-1 text-right hidden sm:block">
+                                                                <input type="number" step="any" className="bg-black/50 border border-white/20 rounded px-2 py-1 w-full text-right text-sm focus:outline-none focus:border-white/50 text-white font-medium" value={editAverageCost} onChange={e => setEditAverageCost(e.target.value)} />
+                                                            </div>
+                                                            <div className="text-right font-medium text-white/90">
+                                                                ${currentPrice.toFixed(2)}
+                                                            </div>
+                                                            <div className="text-right col-span-2 flex flex-col sm:flex-row items-end sm:justify-end gap-2">
+                                                                <div className="flex bg-black rounded-lg overflow-hidden border border-white/10 shadow-lg">
+                                                                    <button onClick={() => handleEditSave(item.id)} className="p-1.5 hover:bg-[#00C805]/20 text-[#00C805] transition-colors" title="Save"><Check className="w-4 h-4" /></button>
+                                                                    <button onClick={cancelEditing} className="p-1.5 hover:bg-red-500/20 text-red-500 transition-colors border-l border-white/10" title="Cancel"><X className="w-4 h-4" /></button>
+                                                                </div>
+                                                            </div>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <div className="text-right font-medium text-white/90">
+                                                                {item.shares.toLocaleString()}
+                                                            </div>
+                                                            <div className="text-right font-medium text-white/50 hidden sm:block">
+                                                                ${item.average_cost.toFixed(2)}
+                                                            </div>
+                                                            <div className="text-right font-medium text-white/90">
+                                                                ${currentPrice.toFixed(2)}
+                                                            </div>
+                                                            <div className="text-right col-span-2 flex flex-col items-end">
+                                                                <span className="font-bold text-base">${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                                <span className="text-xs font-semibold mt-0.5 flex items-center gap-1" style={{ color: itemColor }}>
+                                                                    {itemIsUp ? '+' : ''}{retPercent.toFixed(2)}%
+                                                                </span>
+                                                            </div>
+                                                        </>
+                                                    )}
                                                 </div>
 
-                                                {/* Hover Trash Icon */}
-                                                <div className="absolute right-6 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center translate-x-3 group-hover:translate-x-0 bg-gradient-to-l from-[#111114] via-[#111114] to-transparent pl-8 h-full">
-                                                    <button
-                                                        onClick={() => handleDelete(item.id)}
-                                                        className="p-2 rounded-full hover:bg-white/10 text-white/30 hover:text-red-500 transition-colors"
-                                                    >
-                                                        <Trash2 className="w-5 h-5" />
-                                                    </button>
-                                                </div>
+                                                {/* Hover Trash / Edit Icon */}
+                                                {editingId !== item.id && (
+                                                    <div className="absolute right-6 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-end pl-12 h-full gap-2 z-10 pointer-events-none">
+                                                        <div className="pointer-events-auto flex items-center justify-center translate-x-3 group-hover:translate-x-0 transition-transform bg-gradient-to-l from-[#111114] via-[#111114] to-transparent pl-8 h-full space-x-2">
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); startEditing(item); }}
+                                                                className="p-1.5 rounded-full bg-white/5 hover:bg-white/10 text-white/50 hover:text-white transition-colors"
+                                                                title="Edit"
+                                                            >
+                                                                <Edit2 className="w-4 h-4" />
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}
+                                                                className="p-1.5 rounded-full bg-red-500/5 hover:bg-red-500/10 text-red-500/50 hover:text-red-500 transition-colors"
+                                                                title="Delete"
+                                                            >
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </motion.div>
                                         );
                                     })}
