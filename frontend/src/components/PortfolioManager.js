@@ -372,12 +372,13 @@ export default function PortfolioManager() {
                     ) : (
                         <div className="border border-white/10 rounded-2xl overflow-hidden bg-[#111114]">
                             {/* Table Header */}
-                            <div className="grid grid-cols-6 sm:grid-cols-7 gap-4 px-6 py-3 border-b border-white/10 bg-[#1A1A1E] text-xs font-bold tracking-widest uppercase text-white/40">
-                                <div className="col-span-2 sm:col-span-1">Ticker</div>
+                            <div className="grid grid-cols-4 md:grid-cols-8 gap-2 sm:gap-4 px-4 sm:px-6 py-3 border-b border-white/10 bg-[#1A1A1E] text-xs font-bold tracking-widest uppercase text-white/40 items-center">
+                                <div className="col-span-1 md:col-span-2">Ticker</div>
                                 <div className="text-right">Shares</div>
-                                <div className="text-right hidden sm:block">Avg Cost</div>
+                                <div className="text-right hidden md:block">Avg Cost</div>
                                 <div className="text-right">Price</div>
-                                <div className="text-right col-span-2">Total / Return</div>
+                                <div className="text-right col-span-2 hidden md:block">Total / Return</div>
+                                <div className="text-right">Actions</div>
                             </div>
 
                             {/* Table Rows */}
@@ -400,72 +401,71 @@ export default function PortfolioManager() {
                                                 animate={{ opacity: 1, scale: 1 }}
                                                 exit={{ opacity: 0, scale: 0.95, height: 0, padding: 0, margin: 0 }}
                                                 transition={{ duration: 0.2 }}
-                                                className="group hover:bg-white/5 transition-colors relative block w-full"
+                                                className="group hover:bg-white/5 transition-colors relative block w-full border-b last:border-0 border-white/5"
                                             >
-                                                <div className="grid grid-cols-6 sm:grid-cols-7 gap-4 px-6 py-4 w-full items-center">
-                                                    <div className="col-span-2 sm:col-span-1 font-bold text-white tracking-wide text-lg uppercase">
+                                                <div className="grid grid-cols-4 md:grid-cols-8 gap-2 sm:gap-4 px-4 sm:px-6 py-4 w-full items-center">
+                                                    <div className="col-span-1 md:col-span-2 font-bold text-white tracking-wide text-sm sm:text-lg uppercase break-all">
                                                         {item.ticker}
                                                     </div>
+
                                                     {editingId === item.id ? (
                                                         <>
-                                                            <div className="col-span-1 text-right">
-                                                                <input type="number" step="any" className="bg-black/50 border border-white/20 rounded px-2 py-1 w-full text-right text-sm focus:outline-none focus:border-white/50 text-white font-medium" value={editShares} onChange={e => setEditShares(e.target.value)} />
+                                                            <div className="text-right">
+                                                                <input type="number" step="any" className="bg-black/50 border border-white/20 rounded px-1 sm:px-2 py-1 w-full text-right text-xs sm:text-sm focus:outline-none focus:border-white/50 text-white font-medium" value={editShares} onChange={e => setEditShares(e.target.value)} />
                                                             </div>
-                                                            <div className="col-span-1 text-right hidden sm:block">
-                                                                <input type="number" step="any" className="bg-black/50 border border-white/20 rounded px-2 py-1 w-full text-right text-sm focus:outline-none focus:border-white/50 text-white font-medium" value={editAverageCost} onChange={e => setEditAverageCost(e.target.value)} />
+                                                            <div className="text-right hidden md:block">
+                                                                <input type="number" step="any" className="bg-black/50 border border-white/20 rounded px-1 sm:px-2 py-1 w-full text-right text-xs sm:text-sm focus:outline-none focus:border-white/50 text-white font-medium" value={editAverageCost} onChange={e => setEditAverageCost(e.target.value)} />
                                                             </div>
-                                                            <div className="text-right font-medium text-white/90">
+                                                            <div className="text-right font-medium text-white/90 text-sm sm:text-base">
                                                                 ${currentPrice.toFixed(2)}
                                                             </div>
-                                                            <div className="text-right col-span-2 flex flex-col sm:flex-row items-end sm:justify-end gap-2">
-                                                                <div className="flex bg-black rounded-lg overflow-hidden border border-white/10 shadow-lg">
-                                                                    <button onClick={() => handleEditSave(item.id)} className="p-1.5 hover:bg-[#00C805]/20 text-[#00C805] transition-colors" title="Save"><Check className="w-4 h-4" /></button>
-                                                                    <button onClick={cancelEditing} className="p-1.5 hover:bg-red-500/20 text-red-500 transition-colors border-l border-white/10" title="Cancel"><X className="w-4 h-4" /></button>
-                                                                </div>
-                                                            </div>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <div className="text-right font-medium text-white/90">
-                                                                {item.shares.toLocaleString()}
-                                                            </div>
-                                                            <div className="text-right font-medium text-white/50 hidden sm:block">
-                                                                ${item.average_cost.toFixed(2)}
-                                                            </div>
-                                                            <div className="text-right font-medium text-white/90">
-                                                                ${currentPrice.toFixed(2)}
-                                                            </div>
-                                                            <div className="text-right col-span-2 flex flex-col items-end">
+                                                            <div className="hidden md:flex text-right col-span-2 flex-col items-end">
                                                                 <span className="font-bold text-base">${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                                                 <span className="text-xs font-semibold mt-0.5 flex items-center gap-1" style={{ color: itemColor }}>
                                                                     {itemIsUp ? '+' : ''}{retPercent.toFixed(2)}%
                                                                 </span>
                                                             </div>
+                                                            <div className="flex justify-end items-center gap-[2px] sm:gap-1">
+                                                                <button onClick={() => handleEditSave(item.id)} className="p-1 sm:p-2 rounded bg-green-500/10 hover:bg-green-500/20 text-green-500 transition-colors" title="Save"><Check className="w-4 h-4 sm:w-5 sm:h-5" /></button>
+                                                                <button onClick={cancelEditing} className="p-1 sm:p-2 rounded bg-red-500/10 hover:bg-red-500/20 text-red-500 transition-colors" title="Cancel"><X className="w-4 h-4 sm:w-5 sm:h-5" /></button>
+                                                            </div>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <div className="text-right font-medium text-white/90 text-sm sm:text-base">
+                                                                {item.shares.toLocaleString()}
+                                                            </div>
+                                                            <div className="text-right font-medium text-white/50 hidden md:block">
+                                                                ${item.average_cost.toFixed(2)}
+                                                            </div>
+                                                            <div className="text-right font-medium text-white/90 text-sm sm:text-base">
+                                                                ${currentPrice.toFixed(2)}
+                                                            </div>
+                                                            <div className="hidden md:flex text-right col-span-2 flex-col items-end">
+                                                                <span className="font-bold text-base">${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                                <span className="text-xs font-semibold mt-0.5 flex items-center gap-1" style={{ color: itemColor }}>
+                                                                    {itemIsUp ? '+' : ''}{retPercent.toFixed(2)}%
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex justify-end items-center gap-1 sm:gap-2">
+                                                                <button
+                                                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); startEditing(item); }}
+                                                                    className="p-1.5 sm:p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 text-white/70 hover:text-white transition-colors"
+                                                                    title="Edit"
+                                                                >
+                                                                    <Edit2 className="w-4 h-4" />
+                                                                </button>
+                                                                <button
+                                                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(item.id); }}
+                                                                    className="p-1.5 sm:p-2 rounded-lg bg-red-500/5 hover:bg-red-500/15 border border-red-500/10 text-red-500/70 hover:text-red-500 transition-colors"
+                                                                    title="Delete"
+                                                                >
+                                                                    <Trash2 className="w-4 h-4" />
+                                                                </button>
+                                                            </div>
                                                         </>
                                                     )}
                                                 </div>
-
-                                                {/* Hover Trash / Edit Icon */}
-                                                {editingId !== item.id && (
-                                                    <div className="absolute right-2 sm:right-6 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-end pl-12 h-full gap-2 z-10 pointer-events-none">
-                                                        <div className="pointer-events-auto flex items-center justify-center sm:translate-x-3 group-hover:translate-x-0 transition-transform bg-gradient-to-l from-[#111114] via-[#111114] to-transparent pl-8 h-full space-x-1 sm:space-x-2">
-                                                            <button
-                                                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); startEditing(item); }}
-                                                                className="p-2 sm:p-1.5 rounded-full bg-white/10 sm:bg-white/5 hover:bg-white/20 text-white/80 sm:text-white/50 hover:text-white transition-colors"
-                                                                title="Edit"
-                                                            >
-                                                                <Edit2 className="w-4 h-4" />
-                                                            </button>
-                                                            <button
-                                                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(item.id); }}
-                                                                className="p-2 sm:p-1.5 rounded-full bg-red-500/10 sm:bg-red-500/5 hover:bg-red-500/20 text-red-500/80 sm:text-red-500/50 hover:text-red-500 transition-colors"
-                                                                title="Delete"
-                                                            >
-                                                                <Trash2 className="w-4 h-4" />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                )}
                                             </motion.div>
                                         );
                                     })}
