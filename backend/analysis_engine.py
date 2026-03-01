@@ -130,7 +130,7 @@ async def _call_agent_async(prompt: str, use_json: bool = False, max_retries: in
 
 # ─── Main Analysis Function (SSE Stream) ──────────────────────────────────────
 
-async def analyze_stock_stream(ticker: str) -> AsyncGenerator[str, None]:
+async def analyze_stock_stream(ticker: str, target_date: str = None) -> AsyncGenerator[str, None]:
     """
     Hybrid RAG + Adversarial Multi-Agent Debate architecture as an Async Generator.
     Yields SSE-formatted data chunks:
@@ -150,12 +150,25 @@ async def analyze_stock_stream(ticker: str) -> AsyncGenerator[str, None]:
         ticker = ticker.upper()
 
         # ── 0. Check Cache ────────────────────────────────────────────────────
-        cache_file = os.path.join(CACHE_DIR, f"{ticker}.json")
+        cache_key = f"{ticker}_{target_date}" if target_date else ticker
+        cache_file = os.path.join(CACHE_DIR, f"{cache_key}.json")
+        
         if os.path.exists(cache_file):
-            if time.time() - os.path.getmtime(cache_file) < CACHE_TTL_SECONDS:
+            file_mtime = os.path.getmtime(cache_file)
+            file_date = datetime.fromtimestamp(file_mtime).date()
+            today = datetime.now().date()
+            
+            # Cache is valid if it's for a past date, or if it's today's analysis
+            if target_date or file_date == today:
                 yield sse({"type": "status", "message": f"Cache hit for {ticker}. Loading..."})
                 with open(cache_file, "r") as f:
                     cache_data = json.load(f)
+                
+                if "metadata" not in cache_data:
+                    cache_data["metadata"] = {}
+                cache_data["metadata"]["is_cached"] = True
+                cache_data["metadata"]["generated_at"] = datetime.fromtimestamp(file_mtime).isoformat()
+                    
                 yield sse({"type": "complete", "data": cache_data})
                 return
 
@@ -164,7 +177,17 @@ async def analyze_stock_stream(ticker: str) -> AsyncGenerator[str, None]:
         # ── 1. Fetch Live Data ────────────────────────────────────────────────
         stock = yf.Ticker(ticker)
         info = stock.info
-        end_date = datetime.now()
+        
+        if target_date:
+            try:
+                # Add 1 day to end_date to ensure the target_date is included in yfinance history
+                end_date = datetime.strptime(target_date, "%Y-%m-%d") + timedelta(days=1)
+            except ValueError:
+                yield sse({"type": "error", "message": f"Invalid date format: {target_date}"})
+                return
+        else:
+            end_date = datetime.now()
+            
         hist = stock.history(start=end_date - timedelta(days=365), end=end_date)
         
         if hist.empty:
@@ -364,6 +387,10 @@ async def analyze_stock_stream(ticker: str) -> AsyncGenerator[str, None]:
 
         # ── 9. Return Final Unified Payload ──────────────────────────────────
         final_payload = {
+            "metadata": {
+                "generated_at": datetime.now().isoformat(),
+                "is_cached": False,
+            },
             "ticker": ticker,
             "name": info.get("shortName", info.get("longName", ticker)),
             "score": score,
@@ -445,3 +472,43 @@ def get_historical_data(ticker: str, period: str = "1mo", interval: str = "1d") 
         return chart_data
     except Exception as e:
         return {"error": str(e)}
+
+async def chat_with_agent(ticker: str, user_message: str, target_agent: str, context_score: int = None) -> str:
+    """Invokes a standalone LLM call simulating an agent's response to a user."""
+    ticker = ticker.upper()
+    cache_file = os.path.join(CACHE_DIR, f"{ticker}.json")
+    context_str = "No recent context available."
+    
+    if os.path.exists(cache_file):
+        try:
+            with open(cache_file, "r") as f:
+                data = json.load(f)
+                ai_data = data.get("ai_analysis", {})
+                context_str = json.dumps(ai_data, indent=2)
+        except Exception as e:
+            print(f"Error reading cache for chat: {e}")
+
+    prompt = f"""You are the '{target_agent}' AI agent in a high-stakes financial debate room.
+You are currently analyzing {ticker}.
+Current consensus AI score: {context_score if context_score else 'Unknown'}/100
+
+Recent analysis context for this stock:
+{context_str}
+
+The user has just asked you this question:
+"{user_message}"
+
+Respond DIRECTLY to the user in your unique persona:
+- If Bullish: Aggressive, focused on growth, upside potential, and ignoring the noise.
+- If Bearish: Pessimistic, focused on macro risks, high valuation, and downside.
+- If Quant: Purely mathematical, focused on RSI, moving averages, not fundamentals.
+- If CIO: Balanced, authoritative, focusing on risk-adjusted returns and resolving conflicts.
+
+Keep your response concise (2-4 sentences max), punchy, and highly insightful. Rely on the numeric context provided above where possible. Do not output markdown asterisks or quotes around your response.
+"""
+    try:
+        response = await _call_agent_async(prompt)
+        return response.strip()
+    except Exception as e:
+        return f"Agent {target_agent} failed to respond: {str(e)}"
+

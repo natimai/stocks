@@ -11,6 +11,7 @@ import CommandPalette from './CommandPalette';
 import RollingPrice from './RollingPrice';
 import { auth, googleProvider } from '../lib/firebase';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
+import PortfolioManager from './PortfolioManager';
 
 // ─── MOCK DATA (AAPL - Score 77 - BUY - Up) ─────────────────────────────────
 const MOCK = {
@@ -152,6 +153,11 @@ export default function StockDashboard({ initialTicker, onBack }) {
     const [userProfile, setUserProfile] = useState(null); // { isPro, autoAnalysis, analysisCount }
     const [aiStarted, setAiStarted] = useState(false);    // has AI analysis been kicked off this session
     const [pendingTicker, setPendingTicker] = useState(null); // queued ticker while auth resolves
+
+    const [targetDate, setTargetDate] = useState('');
+    const [chatInput, setChatInput] = useState('');
+    const [chatThread, setChatThread] = useState([]);
+    const [isAgentTyping, setIsAgentTyping] = useState(false);
 
     // Track Auth State + fetch user profile from Firestore
     useEffect(() => {
@@ -307,7 +313,7 @@ export default function StockDashboard({ initialTicker, onBack }) {
     };
 
     // ── SLOW PATH: Run AI analysis (requires auth) ──
-    const runAiAnalysis = async (selectedTicker) => {
+    const runAiAnalysis = async (selectedTicker, optionalDate = targetDate) => {
         if (!selectedTicker) return;
         setAiStarted(true);
         setLoading(true);
@@ -323,7 +329,11 @@ export default function StockDashboard({ initialTicker, onBack }) {
         }
 
         try {
-            const slowRes = await fetch(`https://quantai-backend-316459358121.europe-west1.run.app/api/analyze/${selectedTicker}`, {
+            const baseUrl = typeof window !== 'undefined' && window.location.hostname === 'localhost'
+                ? 'http://localhost:8000'
+                : 'https://quantai-backend-316459358121.europe-west1.run.app';
+            const url = `${baseUrl}/api/analyze/${selectedTicker}` + (optionalDate ? `?date=${optionalDate}` : '');
+            const slowRes = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${idToken}` }
             });
 
@@ -381,10 +391,84 @@ export default function StockDashboard({ initialTicker, onBack }) {
     };
 
     // ── LEGACY: full search (data + AI) used for internal search bar ──
-    const handleSearch = async (selectedTicker) => {
+    const handleSearch = async (selectedTicker, optionalDate = targetDate) => {
         await loadStockData(selectedTicker);
         if (!authLoading) {
-            await runAiAnalysis(selectedTicker);
+            await runAiAnalysis(selectedTicker, optionalDate);
+        }
+    };
+
+    const handleChatSubmit = async (e) => {
+        e.preventDefault();
+        if (!chatInput.trim() || !user) return;
+
+        let targetAgent = "CIO"; // Default
+        const lowerInput = chatInput.toLowerCase();
+        if (lowerInput.includes("@bull")) targetAgent = "Bull";
+        else if (lowerInput.includes("@bear")) targetAgent = "Bear";
+        else if (lowerInput.includes("@quant")) targetAgent = "Quant";
+        else if (lowerInput.includes("@cio")) targetAgent = "CIO";
+
+        const newMessage = {
+            id: Date.now(),
+            role: "user",
+            text: chatInput,
+            align: "right",
+            bubbleClass: "bg-[#005C4B] rounded-2xl rounded-tr-sm text-white",
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+
+        setChatThread(prev => [...prev, newMessage]);
+        setChatInput("");
+        setIsAgentTyping(true);
+
+        try {
+            const token = await user.getIdToken();
+            const baseUrl = typeof window !== 'undefined' && window.location.hostname === 'localhost'
+                ? 'http://localhost:8000'
+                : 'https://quantai-backend-316459358121.europe-west1.run.app';
+
+            const res = await fetch(`${baseUrl}/api/chat_agent`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    ticker: display?.ticker || ticker,
+                    user_message: chatInput,
+                    target_agent: targetAgent,
+                    context_score: display?.score || 50
+                })
+            });
+            if (res.ok) {
+                const data = await res.json();
+
+                let avatar = '/avatars/The CIO Agent.svg';
+                let name = 'The CIO';
+                let nameColor = 'text-white/80';
+
+                if (targetAgent === 'Bull') { avatar = '/avatars/The Bull.svg'; name = 'The Bull'; nameColor = 'text-emerald-500'; }
+                if (targetAgent === 'Bear') { avatar = '/avatars/bear.svg'; name = 'The Bear'; nameColor = 'text-red-400'; }
+                if (targetAgent === 'Quant') { avatar = '/avatars/The Quant.svg'; name = 'The Quant'; nameColor = 'text-cyan-400'; }
+
+                const agentMsg = {
+                    id: Date.now() + 1,
+                    role: "agent",
+                    name: name,
+                    avatar: avatar,
+                    nameColor: nameColor,
+                    align: "left",
+                    bubbleClass: "bg-[#1E1E24] rounded-2xl rounded-tl-sm text-white/90",
+                    text: data.response,
+                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                };
+                setChatThread(prev => [...prev, agentMsg]);
+            }
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setIsAgentTyping(false);
         }
     };
 
@@ -551,7 +635,18 @@ export default function StockDashboard({ initialTicker, onBack }) {
 
                     {/* Right Nav Links */}
                     <div className="hidden md:flex items-center gap-6 text-sm font-medium">
-                        <button className="text-white/50 hover:text-white transition-colors">Portfolio</button>
+                        <button
+                            onClick={() => {
+                                if (!user) {
+                                    handleGoogleLogin();
+                                } else {
+                                    document.getElementById('portfolio')?.scrollIntoView({ behavior: 'smooth' });
+                                }
+                            }}
+                            className="text-white/50 hover:text-white transition-colors"
+                        >
+                            Portfolio
+                        </button>
                         <button className="text-white/50 hover:text-white transition-colors">Screener</button>
                         <button className="text-white/50 hover:text-white transition-colors">History</button>
                         {user ? (
@@ -669,6 +764,13 @@ export default function StockDashboard({ initialTicker, onBack }) {
                                     {display.recommendation || 'HOLD'}
                                 </div>
                             </div>
+                            {display?.metadata && (
+                                <div className="mt-4 text-xs font-medium text-white/40 opacity-80 backdrop-blur-sm border border-white/5 rounded-full px-3 py-1.5 bg-white/5 flex items-center gap-2 whitespace-nowrap">
+                                    {display.metadata.is_cached
+                                        ? <><span>⚡</span> Generated today</>
+                                        : <><span>🤖</span> Analyzed live</>}
+                                </div>
+                            )}
                         </div>
                     ) : (
                         (loading || streamMsg.includes('Error')) ? (
@@ -731,6 +833,28 @@ export default function StockDashboard({ initialTicker, onBack }) {
 
                 {/* ── SECTION 3: CHARTS ── */}
                 <section>
+                    {/* Time Machine / Date Picker */}
+                    <div className="flex items-center gap-4 mb-4 border border-[#1E1E24] bg-[#111114] px-4 py-2 rounded-xl w-max relative group cursor-pointer transition-colors hover:border-white/20">
+                        <Clock className="w-4 h-4 text-white/40 group-hover:text-white/80" />
+                        <span className="text-xs font-bold uppercase tracking-widest text-white/50">Time Machine</span>
+                        <input
+                            type="date"
+                            className="bg-transparent text-sm text-white/90 outline-none border-none cursor-pointer font-medium"
+                            value={targetDate}
+                            max={new Date().toISOString().substring(0, 10)}
+                            onChange={(e) => {
+                                const newDate = e.target.value;
+                                setTargetDate(newDate);
+                                handleSearch(ticker, newDate);
+                            }}
+                        />
+                        {targetDate && (
+                            <div className="flex items-center gap-1.5 bg-[#FF5000]/20 text-[#FF5000] px-2 py-1.5 rounded-md text-[10px] uppercase font-bold tracking-widest border border-[#FF5000]/30 shadow-[0_0_10px_rgba(255,80,0,0.1)]">
+                                <AlertTriangle className="w-3.5 h-3.5" /> Historical View
+                            </div>
+                        )}
+                    </div>
+
                     {/* Timeframe Toggles — each click fetches real chart data & recomputes % */}
                     <div className="flex items-center gap-1 sm:gap-2 mb-6 overflow-x-auto pb-2 scrollbar-none w-full border-b border-[#1E1E24] pb-4">
                         {['1D', '1W', '1M', '3M', 'YTD', '1Y', '5Y', 'ALL'].map(tf => (
@@ -910,7 +1034,7 @@ export default function StockDashboard({ initialTicker, onBack }) {
                         <p className="text-sm text-white/50 mt-1">Live synthesis from autonomous specialist agents.</p>
                     </div>
 
-                    <div className="bg-[#0B141A] sm:rounded-3xl overflow-hidden shadow-2xl flex flex-col h-[700px] border border-white/5 relative">
+                    <div className="bg-black font-sans sm:rounded-3xl overflow-hidden shadow-2xl flex flex-col h-[700px] border border-white/5 relative">
                         {/* Chat Header */}
                         <div className="bg-[#202C33] px-4 py-3 flex items-center gap-3 shadow-md z-10 shrink-0">
                             <div className="w-10 h-10 rounded-full bg-[#111114] flex items-center justify-center shrink-0 border border-white/10 relative overflow-hidden">
@@ -924,7 +1048,7 @@ export default function StockDashboard({ initialTicker, onBack }) {
                         </div>
 
                         {/* Chat Messages / Body */}
-                        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-5 relative" style={{ backgroundImage: 'radial-gradient(circle at center, #111b21 0%, #0b141a 100%)' }}>
+                        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 relative">
 
                             {/* LOCKED STATE - SHOW IF NO DATA/ANALYSIS COMING IN YET */}
                             {(!loading && !sub) && (
@@ -977,27 +1101,59 @@ export default function StockDashboard({ initialTicker, onBack }) {
                                             initial={{ opacity: 0, scale: 0.95, y: 15 }}
                                             animate={{ opacity: 1, scale: 1, y: 0 }}
                                             transition={{ duration: 0.35, delay: i * 0.15, ease: "easeOut" }}
-                                            className={`flex gap-2.5 w-full ${isRight ? 'justify-end' : 'justify-start'}`}
+                                            className={`flex gap-2.5 w-full items-end mt-4 ${isRight ? 'flex-row-reverse' : 'flex-row'}`}
                                         >
-                                            {!isRight && (
-                                                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full overflow-hidden shrink-0 mt-auto mb-1">
-                                                    <img src={agent.avatar} alt={agent.name} className="w-full h-full object-cover" />
-                                                </div>
-                                            )}
+                                            <div className="w-8 h-8 rounded-full overflow-hidden shrink-0">
+                                                <img src={agent.avatar} alt={agent.name} className="w-full h-full object-cover" />
+                                            </div>
 
-                                            <div className={`flex flex-col max-w-[85%] sm:max-w-[75%] ${isRight ? 'items-end' : 'items-start'}`}>
+                                            <div className={`flex flex-col max-w-[75%] ${isRight ? 'items-end' : 'items-start'}`}>
                                                 {!isRight && (
-                                                    <span className={`text-[12px] font-semibold mb-1 ml-1 ${agent.nameColor}`}>
+                                                    <span className="text-xs text-gray-500 mb-1 ml-1">
                                                         {agent.name}
                                                     </span>
                                                 )}
 
-                                                <div className={`relative px-3 sm:px-3.5 py-2 shadow-sm ${agent.bubbleClass}`}>
-                                                    <p className="text-[14px] sm:text-[15px] leading-[1.35] whitespace-pre-wrap">{agent.text}</p>
-                                                    <div className={`flex items-center gap-1 mt-1 ${isRight ? 'justify-end mr-0' : 'justify-end -mr-1'}`}>
-                                                        <span className="text-[10px] text-white/50">{agent.time}</span>
-                                                        {isRight && <CheckCheck className="w-3.5 h-3.5 text-[#53bdeb] ml-0.5" />}
-                                                    </div>
+                                                <div className={`px-4 py-2.5 text-[15px] leading-tight rounded-2xl ${isRight
+                                                    ? 'bg-[#0A84FF] text-white rounded-br-none'
+                                                    : 'bg-[#2C2C2E] text-white rounded-bl-none'
+                                                    }`}>
+                                                    <p className="whitespace-pre-wrap">{agent.text}</p>
+                                                </div>
+                                            </div>
+                                        </motion.div>
+                                    );
+                                })}
+
+                                {/* STREAM LOADING INDICATOR (TYPING) */}
+                                {/* CUSTOM USER & AGENT CHAT MSG THREAD */}
+                                {chatThread.map((msg, i) => {
+                                    const isRight = msg.align === 'right';
+
+                                    return (
+                                        <motion.div
+                                            key={msg.id}
+                                            initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                                            transition={{ duration: 0.35, ease: "easeOut" }}
+                                            className={`flex gap-2.5 w-full items-end mt-4 ${isRight ? 'flex-row-reverse' : 'flex-row'}`}
+                                        >
+                                            <div className="w-8 h-8 rounded-full overflow-hidden shrink-0">
+                                                <img src={msg.avatar} alt={msg.name} className="w-full h-full object-cover" />
+                                            </div>
+
+                                            <div className={`flex flex-col max-w-[75%] ${isRight ? 'items-end' : 'items-start'}`}>
+                                                {!isRight && (
+                                                    <span className="text-xs text-gray-500 mb-1 ml-1">
+                                                        {msg.name}
+                                                    </span>
+                                                )}
+
+                                                <div className={`px-4 py-2.5 text-[15px] leading-tight rounded-2xl ${isRight
+                                                    ? 'bg-[#0A84FF] text-white rounded-br-none'
+                                                    : 'bg-[#2C2C2E] text-white rounded-bl-none'
+                                                    }`}>
+                                                    <p className="whitespace-pre-wrap">{msg.text}</p>
                                                 </div>
                                             </div>
                                         </motion.div>
@@ -1005,18 +1161,18 @@ export default function StockDashboard({ initialTicker, onBack }) {
                                 })}
 
                                 {/* Stream Loading Indicator (Typing) */}
-                                {loading && (
+                                {(loading || isAgentTyping) && (
                                     <motion.div
                                         initial={{ opacity: 0, y: 10 }}
                                         animate={{ opacity: 1, y: 0 }}
-                                        className="flex gap-2.5 w-full justify-start mt-2"
+                                        className="flex gap-2.5 w-full justify-start mt-4 items-end"
                                     >
-                                        <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full overflow-hidden shrink-0 mt-auto mb-1 opacity-50">
+                                        <div className="w-8 h-8 rounded-full overflow-hidden shrink-0">
                                             <div className="w-full h-full bg-[#202C33] flex items-center justify-center">
-                                                <Activity className="w-3.5 h-3.5 text-emerald-500/50" />
+                                                <Activity className="w-4 h-4 text-emerald-500/50" />
                                             </div>
                                         </div>
-                                        <div className="bg-[#202C33] rounded-2xl rounded-bl-sm px-4 py-2.5 inline-flex items-center gap-1.5 shadow-sm self-end">
+                                        <div className="bg-[#2C2C2E] rounded-2xl rounded-bl-none px-4 py-3 inline-flex items-center gap-1.5 self-end">
                                             <span className="w-1.5 h-1.5 bg-emerald-500/80 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
                                             <span className="w-1.5 h-1.5 bg-emerald-500/80 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
                                             <span className="w-1.5 h-1.5 bg-emerald-500/80 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
@@ -1026,21 +1182,39 @@ export default function StockDashboard({ initialTicker, onBack }) {
                             </AnimatePresence>
                         </div>
 
-                        {/* Faux Input Area */}
-                        <div className="bg-[#202C33] px-3 py-3 flex items-center gap-2 sm:gap-3 shrink-0">
-                            <button className="p-1.5 text-white/40 hover:text-white transition-colors">
+                        {/* Interactive Input Area */}
+                        <form onSubmit={handleChatSubmit} className="bg-[#202C33] px-3 py-3 flex items-center gap-2 sm:gap-3 shrink-0">
+                            <button type="button" className="p-1.5 text-white/40 hover:text-white transition-colors">
                                 <Plus className="w-6 h-6" />
                             </button>
-                            <div className="flex-1 bg-[#2A3942] rounded-full px-4 py-2 sm:py-2.5 text-[14px] sm:text-[15px] text-white/40 border border-transparent shadow-inner">
-                                <span className="select-none">Type a prompt to interject...</span>
-                            </div>
-                            <button className="p-1.5 text-white/40 hover:text-white transition-colors">
-                                <Mic className="w-5 h-5 sm:w-6 sm:h-6" />
-                            </button>
-                        </div>
+                            <input
+                                type="text"
+                                className="flex-1 bg-[#2A3942] rounded-full px-4 py-2 sm:py-2.5 text-[14px] sm:text-[15px] text-white/90 border border-transparent focus:outline-none focus:border-white/20 transition-colors shadow-inner placeholder-white/30"
+                                placeholder="Message @quant, @bull, etc..."
+                                value={chatInput}
+                                onChange={(e) => setChatInput(e.target.value)}
+                                disabled={isAgentTyping || !user}
+                            />
+                            {chatInput.trim() ? (
+                                <button type="submit" disabled={isAgentTyping} className="p-1.5 text-[#00C805] hover:scale-110 transition-transform">
+                                    <Send className="w-5 h-5 sm:w-6 sm:h-6" />
+                                </button>
+                            ) : (
+                                <button type="button" className="p-1.5 text-white/40 hover:text-white transition-colors">
+                                    <Mic className="w-5 h-5 sm:w-6 sm:h-6" />
+                                </button>
+                            )}
+                        </form>
 
                     </div>
                 </section>
+
+                {/* ── SECTION 2: PORTFOLIO MANAGER ── */}
+                {user && (
+                    <section id="portfolio" className="pt-4 border-t border-[#1E1E24]">
+                        <PortfolioManager />
+                    </section>
+                )}
 
                 {/* ── FOOTER ── */}
                 <footer className="pt-16 pb-8 mt-12 border-t border-[#1E1E24]">

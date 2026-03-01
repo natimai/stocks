@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { auth, googleProvider } from '../lib/firebase';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
+import PortfolioManager from './PortfolioManager';
 
 // ─── MOCK DATA ──────────────────────────────────────────────────────────────
 const TOP_PICKS_TICKERS = [
@@ -177,6 +178,7 @@ export default function HomeDashboard({ onSearch }) {
     const [liveScans, setLiveScans] = useState(null);
     const [user, setUser] = useState(null);
     const [userProfile, setUserProfile] = useState(null);
+    const [showPortfolio, setShowPortfolio] = useState(false);
 
     // Track Auth State and fetch profile
     useEffect(() => {
@@ -336,10 +338,16 @@ export default function HomeDashboard({ onSearch }) {
                         {[
                             { icon: LayoutDashboard, label: 'Dashboard' },
                             { icon: ScanLine, label: 'Market Scans' },
-                            { icon: Briefcase, label: 'My Portfolio' },
-                        ].map(({ icon: Icon, label }) => (
+                            {
+                                icon: Briefcase, label: 'My Portfolio', onClick: () => {
+                                    if (!user) handleGoogleLogin();
+                                    else setShowPortfolio(true);
+                                }
+                            }
+                        ].map(({ icon: Icon, label, onClick }) => (
                             <button
                                 key={label}
+                                onClick={onClick}
                                 className="flex items-center gap-1.5 text-white/50 hover:text-white transition-colors duration-200"
                             >
                                 <Icon className="w-3.5 h-3.5" />
@@ -399,350 +407,366 @@ export default function HomeDashboard({ onSearch }) {
                 </div>
             </motion.header>
 
-            {/* ── SECTION 2: HERO ── */}
-            <section className="relative max-w-6xl mx-auto px-6 pt-20 pb-28 text-center overflow-hidden">
-                {/* Background ambient glow */}
-                <div
-                    className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] rounded-full pointer-events-none"
-                    style={{
-                        background: 'radial-gradient(ellipse at center, rgba(0,200,5,0.07) 0%, transparent 70%)',
-                        filter: 'blur(40px)',
-                    }}
-                />
-
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-                >
-                    {/* Badge */}
-                    <div className="inline-flex items-center gap-2 bg-[#111114] rounded-full px-4 py-1.5 mb-8"
-                        style={{ border: '1px solid rgba(0,200,5,0.2)' }}>
-                        <Sparkles className="w-3 h-3 text-[#00C805]" />
-                        <span className="text-xs text-[#00C805] font-semibold tracking-widest uppercase">
-                            Multi-Agent AI Framework · Live
-                        </span>
-                    </div>
-
-                    {/* Headline */}
-                    <h1 className="text-5xl md:text-7xl font-bold tracking-tighter leading-[1.05] text-white mb-5">
-                        Wall Street Level AI.
-                        <br />
-                        <span className="text-white/30">In Your Pocket.</span>
-                    </h1>
-
-                    <p className="text-white/40 text-lg md:text-xl max-w-xl mx-auto mb-12 leading-relaxed font-light">
-                        Search any stock and view market data for <strong>free</strong>.
-                        <br className="hidden md:block" />
-                        Get <strong>1 free AI analysis</strong> upon registration. Our AI is built on hundreds of financial studies for maximum accuracy.
-                    </p>
-
-                    {/* Search Bar */}
-                    <form onSubmit={handleSubmit} className="relative max-w-xl mx-auto">
-                        <motion.div
-                            animate={isFocused
-                                ? { boxShadow: '0 0 0 2px rgba(0,200,5,0.35), 0 0 40px rgba(0,200,5,0.12)' }
-                                : { boxShadow: '0 0 0 1px rgba(255,255,255,0.08)' }
-                            }
-                            transition={{ duration: 0.25 }}
-                            className="relative bg-[#111114] rounded-2xl overflow-hidden"
-                            style={{ border: '1px solid rgba(255,255,255,0.1)' }}
+            {/* ── SECTION 2: HERO OR PORTFOLIO ── */}
+            {showPortfolio && user ? (
+                <section className="max-w-6xl mx-auto px-6 pt-10 pb-20">
+                    <div className="mb-6">
+                        <button
+                            onClick={() => setShowPortfolio(false)}
+                            className="text-white/40 hover:text-white text-sm font-medium flex items-center gap-2 transition-colors"
                         >
-                            <Search
-                                className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 pointer-events-none"
-                                style={{ color: isFocused ? '#00C805' : 'rgba(255,255,255,0.25)' }}
-                            />
-                            <input
-                                ref={inputRef}
-                                type="text"
-                                value={query}
-                                onChange={(e) => setQuery(e.target.value.toUpperCase())}
-                                onKeyDown={handleKeyDown}
-                                onFocus={() => setIsFocused(true)}
-                                onBlur={() => setIsFocused(false)}
-                                placeholder={"Search any stock ticker (e.g., NVDA, AAPL)..."}
-                                className={`w-full bg-transparent pl-14 pr-[160px] py-5 text-base outline-none text-white placeholder:text-white/25`}
-                                style={{ fontFamily: 'Inter, sans-serif', letterSpacing: '0.01em' }}
-                            />
-                            <div className="absolute right-3 top-1/2 -translate-y-1/2 z-10">
-                                <motion.button
-                                    type="submit"
-                                    whileHover={{ scale: 1.02 }}
-                                    whileTap={{ scale: 0.97 }}
-                                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-black bg-[#00C805] hover:bg-[#00e005] shadow-[0_0_15px_rgba(0,200,5,0.15)] transition-all"
+                            ← Back to Dashboard
+                        </button>
+                    </div>
+                    <PortfolioManager />
+                </section>
+            ) : (
+                <>
+                    <section className="relative max-w-6xl mx-auto px-6 pt-20 pb-28 text-center overflow-hidden">
+                        {/* Background ambient glow */}
+                        <div
+                            className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] rounded-full pointer-events-none"
+                            style={{
+                                background: 'radial-gradient(ellipse at center, rgba(0,200,5,0.07) 0%, transparent 70%)',
+                                filter: 'blur(40px)',
+                            }}
+                        />
+
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+                        >
+                            {/* Badge */}
+                            <div className="inline-flex items-center gap-2 bg-[#111114] rounded-full px-4 py-1.5 mb-8"
+                                style={{ border: '1px solid rgba(0,200,5,0.2)' }}>
+                                <Sparkles className="w-3 h-3 text-[#00C805]" />
+                                <span className="text-xs text-[#00C805] font-semibold tracking-widest uppercase">
+                                    Multi-Agent AI Framework · Live
+                                </span>
+                            </div>
+
+                            {/* Headline */}
+                            <h1 className="text-5xl md:text-7xl font-bold tracking-tighter leading-[1.05] text-white mb-5">
+                                Wall Street Level AI.
+                                <br />
+                                <span className="text-white/30">In Your Pocket.</span>
+                            </h1>
+
+                            <p className="text-white/40 text-lg md:text-xl max-w-xl mx-auto mb-12 leading-relaxed font-light">
+                                Search any stock and view market data for <strong>free</strong>.
+                                <br className="hidden md:block" />
+                                Get <strong>1 free AI analysis</strong> upon registration. Our AI is built on hundreds of financial studies for maximum accuracy.
+                            </p>
+
+                            {/* Search Bar */}
+                            <form onSubmit={handleSubmit} className="relative max-w-xl mx-auto">
+                                <motion.div
+                                    animate={isFocused
+                                        ? { boxShadow: '0 0 0 2px rgba(0,200,5,0.35), 0 0 40px rgba(0,200,5,0.12)' }
+                                        : { boxShadow: '0 0 0 1px rgba(255,255,255,0.08)' }
+                                    }
+                                    transition={{ duration: 0.25 }}
+                                    className="relative bg-[#111114] rounded-2xl overflow-hidden"
+                                    style={{ border: '1px solid rgba(255,255,255,0.1)' }}
                                 >
-                                    Analyze <ArrowRight className="w-4 h-4" />
-                                </motion.button>
+                                    <Search
+                                        className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 pointer-events-none"
+                                        style={{ color: isFocused ? '#00C805' : 'rgba(255,255,255,0.25)' }}
+                                    />
+                                    <input
+                                        ref={inputRef}
+                                        type="text"
+                                        value={query}
+                                        onChange={(e) => setQuery(e.target.value.toUpperCase())}
+                                        onKeyDown={handleKeyDown}
+                                        onFocus={() => setIsFocused(true)}
+                                        onBlur={() => setIsFocused(false)}
+                                        placeholder={"Search any stock ticker (e.g., NVDA, AAPL)..."}
+                                        className={`w-full bg-transparent pl-14 pr-[160px] py-5 text-base outline-none text-white placeholder:text-white/25`}
+                                        style={{ fontFamily: 'Inter, sans-serif', letterSpacing: '0.01em' }}
+                                    />
+                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 z-10">
+                                        <motion.button
+                                            type="submit"
+                                            whileHover={{ scale: 1.02 }}
+                                            whileTap={{ scale: 0.97 }}
+                                            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-black bg-[#00C805] hover:bg-[#00e005] shadow-[0_0_15px_rgba(0,200,5,0.15)] transition-all"
+                                        >
+                                            Analyze <ArrowRight className="w-4 h-4" />
+                                        </motion.button>
+                                    </div>
+                                </motion.div>
+
+                                {/* Free Tier Explainer Text */}
+                                <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    className="mt-4 flex items-center justify-center gap-2 text-sm text-white/50"
+                                >
+                                    <span><strong className="text-white/80">100% Free</strong> Search & Live Data. <strong className="text-[#00C805]">1 Free AI Analysis</strong> on sign up.</span>
+                                </motion.div>
+                            </form>
+
+                            {/* Typewriter suggestions */}
+                            <div className="mt-4 h-6 flex items-center justify-center">
+                                <TypewriterText suggestions={TYPEWRITER_SUGGESTIONS} />
                             </div>
                         </motion.div>
 
-                        {/* Free Tier Explainer Text */}
+                        {/* Quick ticker chips */}
                         <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
-                            className="mt-4 flex items-center justify-center gap-2 text-sm text-white/50"
+                            transition={{ delay: 0.4, duration: 0.5 }}
+                            className="flex items-center justify-center flex-wrap gap-2 mt-8"
                         >
-                            <span><strong className="text-white/80">100% Free</strong> Search & Live Data. <strong className="text-[#00C805]">1 Free AI Analysis</strong> on sign up.</span>
-                        </motion.div>
-                    </form>
-
-                    {/* Typewriter suggestions */}
-                    <div className="mt-4 h-6 flex items-center justify-center">
-                        <TypewriterText suggestions={TYPEWRITER_SUGGESTIONS} />
-                    </div>
-                </motion.div>
-
-                {/* Quick ticker chips */}
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.4, duration: 0.5 }}
-                    className="flex items-center justify-center flex-wrap gap-2 mt-8"
-                >
-                    {['NVDA', 'AAPL', 'TSLA', 'META', 'MSFT', 'AMZN', 'GOOGL'].map((t) => (
-                        <button
-                            key={t}
-                            onClick={() => onSearch(t)}
-                            className="px-3.5 py-1.5 rounded-full text-xs font-semibold text-white/50 hover:text-white/90 transition-all duration-200"
-                            style={{ border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}
-                        >
-                            {t}
-                        </button>
-                    ))}
-                </motion.div>
-            </section>
-
-            {/* ── SECTION 3: TRENDING AI INSIGHTS ── */}
-            <section className="max-w-6xl mx-auto px-6 pb-24">
-                <motion.div
-                    initial={{ opacity: 0, y: 16 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: 0.2 }}
-                >
-                    <div className="flex items-center justify-between mb-7">
-                        <div className="flex items-center gap-2.5">
-                            <div className="w-1.5 h-1.5 rounded-full bg-[#00C805] animate-pulse" />
-                            <span className="text-xs font-bold uppercase tracking-[0.15em] text-white/40">
-                                Trending AI Insights
-                            </span>
-                        </div>
-                        <button className="text-xs text-white/30 hover:text-white/70 transition-colors flex items-center gap-1">
-                            View all <ChevronRight className="w-3 h-3" />
-                        </button>
-                    </div>
-
-                    {/* Cards — horizontal scroll on mobile, grid on desktop */}
-                    <div className="flex md:grid md:grid-cols-4 gap-4 overflow-x-auto pb-4 md:pb-0 scrollbar-none -mx-6 px-6 md:mx-0 md:px-0">
-                        {livePicks === null
-                            ? TOP_PICKS_TICKERS.map((_, i) => <SkeletonCard key={i} i={i} />)
-                            : displayPicks.map((stock, i) => (
-                                <StockCard key={stock.ticker} stock={stock} onSearch={onSearch} index={i} />
-                            ))
-                        }
-                    </div>
-                </motion.div>
-            </section>
-
-            {/* ── SECTION 4: RECENT AI SCANS ── */}
-            <section className="max-w-6xl mx-auto px-6 pb-24">
-                <motion.div
-                    initial={{ opacity: 0, y: 16 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true, margin: '-60px' }}
-                    transition={{ duration: 0.5 }}
-                >
-                    <div className="flex items-center gap-2.5 mb-7">
-                        <div className="w-1.5 h-1.5 rounded-full bg-[#FFB800] animate-pulse" />
-                        <span className="text-xs font-bold uppercase tracking-[0.15em] text-white/40">
-                            Recent AI Scans
-                        </span>
-                    </div>
-
-                    <div
-                        className="rounded-2xl overflow-hidden"
-                        style={{ border: '1px solid rgba(255,255,255,0.05)' }}
-                    >
-                        {displayScans.map((scan, i) => {
-                            const isUp = scan.signal === 'BUY' || scan.signal === 'STRONG BUY';
-                            const color = getScoreColor(scan.score);
-                            return (
-                                <motion.div
-                                    key={scan.ticker}
-                                    initial={{ opacity: 0, x: -10 }}
-                                    whileInView={{ opacity: 1, x: 0 }}
-                                    viewport={{ once: true }}
-                                    transition={{ delay: i * 0.06, duration: 0.35 }}
-                                    onClick={() => onSearch(scan.ticker)}
-                                    className="flex items-center justify-between px-6 py-4 cursor-pointer transition-colors hover:bg-white/[0.03] group"
-                                    style={i !== displayScans.length - 1 ? { borderBottom: '1px solid rgba(255,255,255,0.04)' } : {}}
+                            {['NVDA', 'AAPL', 'TSLA', 'META', 'MSFT', 'AMZN', 'GOOGL'].map((t) => (
+                                <button
+                                    key={t}
+                                    onClick={() => onSearch(t)}
+                                    className="px-3.5 py-1.5 rounded-full text-xs font-semibold text-white/50 hover:text-white/90 transition-all duration-200"
+                                    style={{ border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}
                                 >
-                                    {/* Left: ticker + timestamp */}
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 overflow-hidden bg-white/5"
-                                            style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
-                                            <img
-                                                src={`https://img.logokit.com/ticker/${scan.ticker}?token=pk_frfa213068bb8ffac35321`}
-                                                alt={`${scan.ticker} logo`}
-                                                className="w-full h-full object-contain p-1.5"
-                                                onError={(e) => { e.target.onerror = null; e.target.style.display = 'none'; }}
-                                            />
-                                        </div>
-                                        <div>
-                                            <div className="text-sm font-bold text-white">{scan.ticker}</div>
-                                            <div className="flex items-center gap-1.5 mt-0.5">
-                                                <Clock className="w-2.5 h-2.5 text-white/25" />
-                                                <span className="text-[11px] text-white/30">Analyzed {scan.ago}</span>
-                                            </div>
-                                        </div>
-                                    </div>
+                                    {t}
+                                </button>
+                            ))}
+                        </motion.div>
+                    </section>
 
-                                    {/* Right: price, score, signal */}
-                                    <div className="flex items-center gap-6">
-                                        <div className="hidden sm:block text-sm font-medium text-white/70">
-                                            {scan.price != null ? `$${scan.price.toFixed(2)}` : <span className="w-16 h-3 bg-white/10 rounded animate-pulse inline-block" />}
-                                        </div>
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="text-lg font-bold" style={{ color }}>{scan.score}</span>
-                                            <span className="text-[10px] text-white/30 uppercase">/ 100</span>
-                                        </div>
-                                        <div
-                                            className="text-[10px] font-bold tracking-wider px-2.5 py-1 rounded-full uppercase hidden sm:block"
-                                            style={{ backgroundColor: `${getSignalBg(scan.signal)}15`, color: getSignalBg(scan.signal) }}
-                                        >
-                                            {scan.signal}
-                                        </div>
-                                        <ChevronRight className="w-4 h-4 text-white/15 group-hover:text-white/40 transition-colors" />
-                                    </div>
-                                </motion.div>
-                            );
-                        })}
-                    </div>
-                </motion.div>
-            </section>
+                    {/* ── SECTION 3: TRENDING AI INSIGHTS ── */}
+                    <section className="max-w-6xl mx-auto px-6 pb-24">
+                        <motion.div
+                            initial={{ opacity: 0, y: 16 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.5, delay: 0.2 }}
+                        >
+                            <div className="flex items-center justify-between mb-7">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-[#00C805] animate-pulse" />
+                                    <span className="text-xs font-bold uppercase tracking-[0.15em] text-white/40">
+                                        Trending AI Insights
+                                    </span>
+                                </div>
+                                <button className="text-xs text-white/30 hover:text-white/70 transition-colors flex items-center gap-1">
+                                    View all <ChevronRight className="w-3 h-3" />
+                                </button>
+                            </div>
 
-            {/* ── SECTION 5: HOW OUR AI WORKS ── */}
-            <section className="max-w-6xl mx-auto px-6 pb-32">
-                <motion.div
-                    initial={{ opacity: 0, y: 16 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true, margin: '-60px' }}
-                    transition={{ duration: 0.5 }}
-                >
-                    <div className="text-center mb-14">
-                        <span className="text-xs font-bold uppercase tracking-[0.15em] text-white/30">
-                            How Our AI Works
-                        </span>
-                        <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-white mt-3">
-                            The Multi-Agent Debate Framework
-                        </h2>
-                        <p className="text-white/40 mt-3 text-base max-w-lg mx-auto">
-                            No black boxes. Four autonomous agents argue every trade — then a Chief Investment Officer scores the outcome.
-                        </p>
-                    </div>
+                            {/* Cards — horizontal scroll on mobile, grid on desktop */}
+                            <div className="flex md:grid md:grid-cols-4 gap-4 overflow-x-auto pb-4 md:pb-0 scrollbar-none -mx-6 px-6 md:mx-0 md:px-0">
+                                {livePicks === null
+                                    ? TOP_PICKS_TICKERS.map((_, i) => <SkeletonCard key={i} i={i} />)
+                                    : displayPicks.map((stock, i) => (
+                                        <StockCard key={stock.ticker} stock={stock} onSearch={onSearch} index={i} />
+                                    ))
+                                }
+                            </div>
+                        </motion.div>
+                    </section>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {[
-                            {
-                                icon: '🐂',
-                                color: '#00C805',
-                                label: 'The Bull',
-                                sublabel: 'Fundamental Analysis',
-                                desc: 'Analyzes earnings growth, P/E ratios, FCF yield, and institutional ownership to build the strongest possible long case.',
-                                lucideIcon: TrendingUp,
-                            },
-                            {
-                                icon: '🐻',
-                                color: '#FF5000',
-                                label: 'The Bear',
-                                sublabel: 'Macro Risk Stress-Test',
-                                desc: 'Challenges every thesis. Stress-tests against VIX spikes, interest rate risk, geopolitical exposure, and sector rotations.',
-                                lucideIcon: TrendingDown,
-                            },
-                            {
-                                icon: '⚖️',
-                                color: '#FFB800',
-                                label: 'The Judge',
-                                sublabel: 'Final Synthesis & Score',
-                                desc: 'The Chief Investment Officer absorbs both arguments, applies quantitative weighting, and delivers a 0–100 AI score with a clear signal.',
-                                lucideIcon: Scale,
-                            },
-                        ].map(({ icon, color, label, sublabel, desc, lucideIcon: Icon }, i) => (
-                            <motion.div
-                                key={label}
-                                initial={{ opacity: 0, y: 20 }}
-                                whileInView={{ opacity: 1, y: 0 }}
-                                viewport={{ once: true }}
-                                transition={{ delay: i * 0.12, duration: 0.45 }}
-                                whileHover={{ y: -4, transition: { duration: 0.2 } }}
-                                className="bg-[#0A0A0C] rounded-2xl p-7 flex flex-col gap-5 group"
+                    {/* ── SECTION 4: RECENT AI SCANS ── */}
+                    <section className="max-w-6xl mx-auto px-6 pb-24">
+                        <motion.div
+                            initial={{ opacity: 0, y: 16 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true, margin: '-60px' }}
+                            transition={{ duration: 0.5 }}
+                        >
+                            <div className="flex items-center gap-2.5 mb-7">
+                                <div className="w-1.5 h-1.5 rounded-full bg-[#FFB800] animate-pulse" />
+                                <span className="text-xs font-bold uppercase tracking-[0.15em] text-white/40">
+                                    Recent AI Scans
+                                </span>
+                            </div>
+
+                            <div
+                                className="rounded-2xl overflow-hidden"
                                 style={{ border: '1px solid rgba(255,255,255,0.05)' }}
                             >
-                                {/* Icon ring */}
-                                <div className="flex items-center gap-3">
-                                    <div
-                                        className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl"
-                                        style={{ backgroundColor: `${color}12`, border: `1px solid ${color}25` }}
-                                    >
-                                        {icon}
-                                    </div>
-                                    <div>
-                                        <div className="font-bold text-white text-sm">{label}</div>
-                                        <div className="text-[11px] uppercase tracking-widest font-medium mt-0.5" style={{ color }}>
-                                            {sublabel}
-                                        </div>
-                                    </div>
-                                </div>
+                                {displayScans.map((scan, i) => {
+                                    const isUp = scan.signal === 'BUY' || scan.signal === 'STRONG BUY';
+                                    const color = getScoreColor(scan.score);
+                                    return (
+                                        <motion.div
+                                            key={scan.ticker}
+                                            initial={{ opacity: 0, x: -10 }}
+                                            whileInView={{ opacity: 1, x: 0 }}
+                                            viewport={{ once: true }}
+                                            transition={{ delay: i * 0.06, duration: 0.35 }}
+                                            onClick={() => onSearch(scan.ticker)}
+                                            className="flex items-center justify-between px-6 py-4 cursor-pointer transition-colors hover:bg-white/[0.03] group"
+                                            style={i !== displayScans.length - 1 ? { borderBottom: '1px solid rgba(255,255,255,0.04)' } : {}}
+                                        >
+                                            {/* Left: ticker + timestamp */}
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 overflow-hidden bg-white/5"
+                                                    style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+                                                    <img
+                                                        src={`https://img.logokit.com/ticker/${scan.ticker}?token=pk_frfa213068bb8ffac35321`}
+                                                        alt={`${scan.ticker} logo`}
+                                                        className="w-full h-full object-contain p-1.5"
+                                                        onError={(e) => { e.target.onerror = null; e.target.style.display = 'none'; }}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <div className="text-sm font-bold text-white">{scan.ticker}</div>
+                                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                                        <Clock className="w-2.5 h-2.5 text-white/25" />
+                                                        <span className="text-[11px] text-white/30">Analyzed {scan.ago}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
 
-                                <p className="text-[14px] text-white/50 leading-relaxed">
-                                    {desc}
-                                </p>
+                                            {/* Right: price, score, signal */}
+                                            <div className="flex items-center gap-6">
+                                                <div className="hidden sm:block text-sm font-medium text-white/70">
+                                                    {scan.price != null ? `$${scan.price.toFixed(2)}` : <span className="w-16 h-3 bg-white/10 rounded animate-pulse inline-block" />}
+                                                </div>
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-lg font-bold" style={{ color }}>{scan.score}</span>
+                                                    <span className="text-[10px] text-white/30 uppercase">/ 100</span>
+                                                </div>
+                                                <div
+                                                    className="text-[10px] font-bold tracking-wider px-2.5 py-1 rounded-full uppercase hidden sm:block"
+                                                    style={{ backgroundColor: `${getSignalBg(scan.signal)}15`, color: getSignalBg(scan.signal) }}
+                                                >
+                                                    {scan.signal}
+                                                </div>
+                                                <ChevronRight className="w-4 h-4 text-white/15 group-hover:text-white/40 transition-colors" />
+                                            </div>
+                                        </motion.div>
+                                    );
+                                })}
+                            </div>
+                        </motion.div>
+                    </section>
 
-                                <div className="mt-auto flex items-center gap-1.5 text-xs font-semibold" style={{ color: `${color}80` }}>
-                                    <Icon className="w-3.5 h-3.5" />
-                                    <span style={{ color }}>{label === 'The Judge' ? 'Final Score' : label === 'The Bull' ? 'Bullish Drivers' : 'Risk Factors'}</span>
-                                </div>
-                            </motion.div>
-                        ))}
-                    </div>
-
-                    {/* CTA row after agents */}
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        whileInView={{ opacity: 1 }}
-                        viewport={{ once: true }}
-                        transition={{ delay: 0.4, duration: 0.5 }}
-                        className="mt-12 flex flex-col sm:flex-row items-center justify-center gap-4"
-                    >
-                        <button
-                            onClick={() => inputRef?.current?.focus()}
-                            className="flex items-center gap-2 px-8 py-3.5 rounded-xl font-bold text-sm text-black transition-all hover:brightness-110 active:scale-95"
-                            style={{ backgroundColor: '#00C805' }}
+                    {/* ── SECTION 5: HOW OUR AI WORKS ── */}
+                    <section className="max-w-6xl mx-auto px-6 pb-32">
+                        <motion.div
+                            initial={{ opacity: 0, y: 16 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true, margin: '-60px' }}
+                            transition={{ duration: 0.5 }}
                         >
-                            <Zap className="w-4 h-4" />
-                            Run Your First Analysis
-                        </button>
-                        <button className="flex items-center gap-2 px-8 py-3.5 rounded-xl font-bold text-sm text-white/60 hover:text-white transition-colors">
-                            View sample report
-                            <ArrowRight className="w-3.5 h-3.5" />
-                        </button>
-                    </motion.div>
-                </motion.div>
-            </section>
+                            <div className="text-center mb-14">
+                                <span className="text-xs font-bold uppercase tracking-[0.15em] text-white/30">
+                                    How Our AI Works
+                                </span>
+                                <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-white mt-3">
+                                    The Multi-Agent Debate Framework
+                                </h2>
+                                <p className="text-white/40 mt-3 text-base max-w-lg mx-auto">
+                                    No black boxes. Four autonomous agents argue every trade — then a Chief Investment Officer scores the outcome.
+                                </p>
+                            </div>
 
-            {/* ── FOOTER ── */}
-            <footer
-                className="max-w-6xl mx-auto px-6 py-10"
-                style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}
-            >
-                <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                    <div className="flex items-center gap-2">
-                        <img src="/logo.svg" className="w-3.5 h-3.5" />
-                        <span className="text-xs text-white/20 font-semibold">ConsensusAI</span>
-                    </div>
-                    <p className="text-xs text-white/20">© 2026 ConsensusAI Technologies. For informational purposes only. Not financial advice.</p>
-                    <p className="text-[10px] text-white/15 uppercase tracking-widest font-bold">Pure Data · No Noise</p>
-                </div>
-            </footer>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                {[
+                                    {
+                                        icon: '🐂',
+                                        color: '#00C805',
+                                        label: 'The Bull',
+                                        sublabel: 'Fundamental Analysis',
+                                        desc: 'Analyzes earnings growth, P/E ratios, FCF yield, and institutional ownership to build the strongest possible long case.',
+                                        lucideIcon: TrendingUp,
+                                    },
+                                    {
+                                        icon: '🐻',
+                                        color: '#FF5000',
+                                        label: 'The Bear',
+                                        sublabel: 'Macro Risk Stress-Test',
+                                        desc: 'Challenges every thesis. Stress-tests against VIX spikes, interest rate risk, geopolitical exposure, and sector rotations.',
+                                        lucideIcon: TrendingDown,
+                                    },
+                                    {
+                                        icon: '⚖️',
+                                        color: '#FFB800',
+                                        label: 'The Judge',
+                                        sublabel: 'Final Synthesis & Score',
+                                        desc: 'The Chief Investment Officer absorbs both arguments, applies quantitative weighting, and delivers a 0–100 AI score with a clear signal.',
+                                        lucideIcon: Scale,
+                                    },
+                                ].map(({ icon, color, label, sublabel, desc, lucideIcon: Icon }, i) => (
+                                    <motion.div
+                                        key={label}
+                                        initial={{ opacity: 0, y: 20 }}
+                                        whileInView={{ opacity: 1, y: 0 }}
+                                        viewport={{ once: true }}
+                                        transition={{ delay: i * 0.12, duration: 0.45 }}
+                                        whileHover={{ y: -4, transition: { duration: 0.2 } }}
+                                        className="bg-[#0A0A0C] rounded-2xl p-7 flex flex-col gap-5 group"
+                                        style={{ border: '1px solid rgba(255,255,255,0.05)' }}
+                                    >
+                                        {/* Icon ring */}
+                                        <div className="flex items-center gap-3">
+                                            <div
+                                                className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl"
+                                                style={{ backgroundColor: `${color}12`, border: `1px solid ${color}25` }}
+                                            >
+                                                {icon}
+                                            </div>
+                                            <div>
+                                                <div className="font-bold text-white text-sm">{label}</div>
+                                                <div className="text-[11px] uppercase tracking-widest font-medium mt-0.5" style={{ color }}>
+                                                    {sublabel}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <p className="text-[14px] text-white/50 leading-relaxed">
+                                            {desc}
+                                        </p>
+
+                                        <div className="mt-auto flex items-center gap-1.5 text-xs font-semibold" style={{ color: `${color}80` }}>
+                                            <Icon className="w-3.5 h-3.5" />
+                                            <span style={{ color }}>{label === 'The Judge' ? 'Final Score' : label === 'The Bull' ? 'Bullish Drivers' : 'Risk Factors'}</span>
+                                        </div>
+                                    </motion.div>
+                                ))}
+                            </div>
+
+                            {/* CTA row after agents */}
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                whileInView={{ opacity: 1 }}
+                                viewport={{ once: true }}
+                                transition={{ delay: 0.4, duration: 0.5 }}
+                                className="mt-12 flex flex-col sm:flex-row items-center justify-center gap-4"
+                            >
+                                <button
+                                    onClick={() => inputRef?.current?.focus()}
+                                    className="flex items-center gap-2 px-8 py-3.5 rounded-xl font-bold text-sm text-black transition-all hover:brightness-110 active:scale-95"
+                                    style={{ backgroundColor: '#00C805' }}
+                                >
+                                    <Zap className="w-4 h-4" />
+                                    Run Your First Analysis
+                                </button>
+                                <button className="flex items-center gap-2 px-8 py-3.5 rounded-xl font-bold text-sm text-white/60 hover:text-white transition-colors">
+                                    View sample report
+                                    <ArrowRight className="w-3.5 h-3.5" />
+                                </button>
+                            </motion.div>
+                        </motion.div>
+                    </section>
+
+                    {/* ── FOOTER ── */}
+                    <footer
+                        className="max-w-6xl mx-auto px-6 py-10"
+                        style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}
+                    >
+                        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                            <div className="flex items-center gap-2">
+                                <img src="/logo.svg" className="w-3.5 h-3.5" />
+                                <span className="text-xs text-white/20 font-semibold">ConsensusAI</span>
+                            </div>
+                            <p className="text-xs text-white/20">© 2026 ConsensusAI Technologies. For informational purposes only. Not financial advice.</p>
+                            <p className="text-[10px] text-white/15 uppercase tracking-widest font-bold">Pure Data · No Noise</p>
+                        </div>
+                    </footer>
+                </>
+            )}
         </div>
     );
 }

@@ -3,10 +3,11 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import uvicorn
+from typing import Optional
 import requests
-from analysis_engine import analyze_stock_stream, get_historical_data
+from analysis_engine import analyze_stock_stream, get_historical_data, genai, api_key
 import yfinance as yf
+import json
 
 import firebase_admin
 from firebase_admin import credentials, auth, firestore
@@ -164,7 +165,7 @@ def get_user_profile(user_data: dict = Depends(verify_token_and_check_limit)):
     return {"uid": user_data['uid'], "isPro": False, "analysisCount": 0, "autoAnalysis": False}
 
 class UserSettings(BaseModel):
-    autoAnalysis: bool | None = None
+    autoAnalysis: Optional[bool] = None
 
 @app.patch("/api/user-settings")
 def update_user_settings(settings: UserSettings, user_data: dict = Depends(verify_token_and_check_limit)):
@@ -182,7 +183,7 @@ def update_user_settings(settings: UserSettings, user_data: dict = Depends(verif
     return {"success": True}
 
 @app.get("/api/analyze/{ticker}")
-async def get_stock_analysis(ticker: str, user_data: dict = Depends(verify_token_and_check_limit)):
+async def get_stock_analysis(ticker: str, date: str = Query(None), user_data: dict = Depends(verify_token_and_check_limit)):
     """
     Endpoint to retrieve complete AI-driven stock analysis for a given ticker,
     streamed sequentially (Bull -> Bear -> Quant -> CIO).
@@ -197,7 +198,7 @@ async def get_stock_analysis(ticker: str, user_data: dict = Depends(verify_token
             'analysisCount': firestore.Increment(1)
         })
 
-    return StreamingResponse(analyze_stock_stream(ticker), media_type="text/event-stream")
+    return StreamingResponse(analyze_stock_stream(ticker, date), media_type="text/event-stream")
 
 @app.get("/api/chart/{ticker}")
 def get_chart(ticker: str, period: str = Query("1mo"), interval: str = Query("1d")):
@@ -211,6 +212,30 @@ def get_chart(ticker: str, period: str = Query("1mo"), interval: str = Query("1d
     if isinstance(result, dict) and "error" in result:
         raise HTTPException(status_code=500, detail=result["error"])
     return result
+
+class ChatAgentRequest(BaseModel):
+    ticker: str
+    user_message: str
+    target_agent: str
+    context_score: Optional[int] = None
+
+@app.post("/api/chat_agent")
+async def chat_agent(request: ChatAgentRequest, user_data: dict = Depends(verify_token_and_check_limit)):
+    """
+    User endpoint to chat with a specific AI agent using persona and context.
+    """
+    from analysis_engine import chat_with_agent
+    try:
+        response_text = await chat_with_agent(
+            request.ticker,
+            request.user_message,
+            request.target_agent,
+            request.context_score
+        )
+        return {"response": response_text}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/search")
 def search_tickers(q: str = Query(..., min_length=1)):
@@ -236,6 +261,228 @@ def search_tickers(q: str = Query(..., min_length=1)):
         return results
     except Exception as e:
         return []
+
+class PortfolioItem(BaseModel):
+    ticker: str
+    shares: float
+    average_cost: float
+
+class DoctorChatRequest(BaseModel):
+    messages: list
+
+@app.post("/api/portfolio-doctor/chat")
+async def portfolio_doctor_chat(request: DoctorChatRequest, user_data: dict = Depends(verify_token_and_check_limit)):
+    if not api_key:
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY is not set.")
+        
+    uid = user_data["uid"]
+    user_ref = db.collection('users').document(uid)
+    doc = user_ref.get()
+    user_profile = doc.to_dict() if doc.exists else {}
+    
+    profile_for_prompt = {
+        "Age": user_profile.get("age"),
+        "Investment_Horizon": user_profile.get("investment_horizon"),
+        "Risk_Tolerance": user_profile.get("risk_tolerance"),
+        "Primary_Financial_Goal": user_profile.get("target_goal")
+    }
+    
+    # We define the tool definition manually for the Gemini API
+    update_user_profile_tool = {
+        "function_declarations": [
+            {
+                "name": "update_user_profile",
+                "description": "Updates the user's financial profile in the database.",
+                "parameters": {
+                    "type_": "OBJECT",
+                    "properties": {
+                        "key": {
+                            "type_": "STRING",
+                            "description": "The profile key to update (Age, Investment_Horizon, Risk_Tolerance, Primary_Financial_Goal)"
+                        },
+                        "value": {
+                            "type_": "STRING",
+                            "description": "The value to save for the profile key."
+                        }
+                    },
+                    "required": ["key", "value"]
+                }
+            }
+        ]
+    }
+    
+    holdings = []
+    for h_doc in user_ref.collection('portfolio').stream():
+        d = h_doc.to_dict()
+        if 'createdAt' in d and hasattr(d['createdAt'], 'isoformat'):
+            d['createdAt'] = d['createdAt'].isoformat()
+        holdings.append(d)
+
+    system_prompt = f"""Role:
+You are the "Chief Portfolio Doctor" for Consensus, an elite AI Wealth Management platform. Your ultimate goal is to ensure the user's stock portfolio perfectly aligns with their personal financial goals (Goal Alignment).
+
+Your Instructions & Protocol:
+You operate in a strict loop. Before providing any financial analysis, you MUST verify that you have a complete understanding of the user's financial profile.
+
+Step 1: The Profile Check
+Look at the injected User_Profile JSON context. To provide an accurate portfolio diagnosis, you require the following 4 data points:
+- Age
+- Investment Horizon (e.g., short-term, 5 years, retirement)
+- Risk Tolerance (e.g., conservative, moderate, aggressive)
+- Primary Financial Goal (e.g., buying a house, passive income, capital preservation)
+
+User_Profile:
+{json.dumps(profile_for_prompt, indent=2)}
+
+Current_Holdings:
+{json.dumps(holdings, indent=2)}
+
+Step 2: Information Gathering (If data is missing)
+If ANY of the 4 data points are missing or null in User_Profile, DO NOT analyze the portfolio yet. Instead, act conversationally and ask the user a polite, engaging question to gather the missing information. Ask one question at a time.
+
+Step 3: Updating Memory (Tool Calling)
+If the user's message contains the answer to a missing profile data point, you MUST immediately execute the `update_user_profile` tool to permanently save this information to the database.
+
+Step 4: Portfolio Diagnosis (Once profile is complete)
+Only when all 4 profile criteria are known, proceed to analyze the user's Current_Holdings.
+Use Financial Chain-of-Thought (FinCoT) reasoning to evaluate the portfolio against their profile:
+- Does an aggressive tech-heavy portfolio make sense for a 65-year-old wanting capital preservation? (Flag as high risk).
+- Is a highly diversified, low-beta portfolio appropriate for a 25-year-old seeking aggressive growth? (Flag as too conservative).
+
+Output Style:
+Speak directly to the user. Be professional, slightly witty, and highly analytical. Avoid long essays; use bullet points and clear actionable advice.
+"""
+
+    async def chat_stream():
+        try:
+            # Reconstruct history for Gemini API natively
+            gemini_history = []
+            for m in request.messages[:-1]:
+                gemini_history.append({"role": "user" if m["role"] == "user" else "model", "parts": [m["parts"][0]]})
+                
+            model = genai.GenerativeModel("gemini-3-pro-preview", tools=[update_user_profile_tool], system_instruction=system_prompt)
+            chat = model.start_chat(history=gemini_history)
+            
+            last_msg = request.messages[-1]["parts"][0]
+            response = await chat.send_message_async(last_msg, stream=True)
+            
+            tool_calls_to_make = []
+            
+            # Step 1: Fully resolve the initial stream and collect any tool calls
+            async for chunk in response:
+                for part in chunk.parts:
+                    if part.function_call:
+                        tool_calls_to_make.append(part.function_call)
+                    elif part.text:
+                        yield "data: " + json.dumps({"type": "text", "text": part.text}) + "\n\n"
+                        
+            # Critical Fix: we must explicitly resolve the generator before continuing the chat loop
+            await response.resolve()
+                        
+            # Step 2: If the model invoked a tool, execute it and send the result back
+            if tool_calls_to_make:
+                for fc in tool_calls_to_make:
+                    if fc.name == "update_user_profile":
+                        key = fc.args.get("key", "")
+                        val = fc.args.get("value", "")
+                        
+                        db_key_map = {
+                            "Age": "age",
+                            "Investment_Horizon": "investment_horizon",
+                            "Risk_Tolerance": "risk_tolerance",
+                            "Primary_Financial_Goal": "target_goal"
+                        }
+                        db_key = db_key_map.get(key, key.lower())
+                        user_ref.set({db_key: val}, merge=True)
+                        
+                        yield "data: " + json.dumps({"type": "tool_call", "message": "System: User profile updated in memory."}) + "\n\n"
+                        
+                        # Send function response back
+                        tool_response_part = genai.protos.Part(
+                            function_response=genai.protos.FunctionResponse(
+                                name="update_user_profile",
+                                response={"result": "success"}
+                            )
+                        )
+                        follow_up = await chat.send_message_async(tool_response_part, stream=True)
+                        async for fu_chunk in follow_up:
+                            if fu_chunk.text:
+                                yield "data: " + json.dumps({"type": "text", "text": fu_chunk.text}) + "\n\n"
+            
+            yield "data: " + json.dumps({"type": "done"}) + "\n\n"
+        except Exception as e:
+            yield "data: " + json.dumps({"type": "error", "message": str(e)}) + "\n\n"
+
+    return StreamingResponse(chat_stream(), media_type="text/event-stream")
+
+@app.get("/api/portfolio")
+def get_portfolio(user_data: dict = Depends(verify_token_and_check_limit)):
+    """Fetches all holdings for the user."""
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database not available.")
+    uid = user_data["uid"]
+    holdings = []
+    try:
+        docs = db.collection('users').document(uid).collection('portfolio').stream()
+        for doc in docs:
+            d = doc.to_dict()
+            d['id'] = doc.id
+            if 'createdAt' in d and hasattr(d['createdAt'], 'isoformat'):
+                d['createdAt'] = d['createdAt'].isoformat()
+            holdings.append(d)
+        return holdings
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/portfolio")
+def add_portfolio_item(item: PortfolioItem, user_data: dict = Depends(verify_token_and_check_limit)):
+    """Inserts a new holding into the database."""
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database not available.")
+    uid = user_data["uid"]
+    if not item.ticker or item.shares <= 0 or item.average_cost < 0:
+        raise HTTPException(status_code=400, detail="Invalid portfolio data")
+        
+    try:
+        portfolio_ref = db.collection('users').document(uid).collection('portfolio')
+        doc_ref = portfolio_ref.document()
+        new_item = {
+            'ticker': item.ticker.upper(),
+            'shares': float(item.shares),
+            'average_cost': float(item.average_cost),
+            'createdAt': firestore.SERVER_TIMESTAMP
+        }
+        doc_ref.set(new_item)
+        
+        # SERVER_TIMESTAMP isn't JSON serializable directly when returning quickly,
+        # so we return the constructed dict cleanly
+        return_item = {
+            'id': doc_ref.id,
+            'ticker': new_item['ticker'],
+            'shares': new_item['shares'],
+            'average_cost': new_item['average_cost']
+        }
+        return return_item
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/portfolio/{item_id}")
+def delete_portfolio_item(item_id: str, user_data: dict = Depends(verify_token_and_check_limit)):
+    """Removes a holding from the database."""
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database not available.")
+    uid = user_data["uid"]
+    try:
+        doc_ref = db.collection('users').document(uid).collection('portfolio').document(item_id)
+        if not doc_ref.get().exists:
+            raise HTTPException(status_code=404, detail="Portfolio item not found")
+            
+        doc_ref.delete()
+        return {"success": True, "id": item_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     # Start the application using Uvicorn
