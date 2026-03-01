@@ -35,10 +35,9 @@ export default function PortfolioDoctorChat({ isOpen, onClose }) {
     }, [isOpen]);
 
     const getBaseUrl = () => {
-        if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-            return 'http://localhost:8000';
-        }
-        return '';
+        return typeof window !== 'undefined' && window.location.hostname === 'localhost'
+            ? 'http://localhost:8000'
+            : 'https://quantai-backend-316459358121.europe-west1.run.app';
     };
 
     const handleSend = async (e) => {
