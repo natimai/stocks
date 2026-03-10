@@ -1,4 +1,5 @@
 import './globals.css'
+import MonitoringBootstrap from '../components/MonitoringBootstrap'
 
 export const metadata = {
     title: 'ConsensusAI | AI-Powered Stock Analysis',
@@ -18,7 +19,10 @@ export const viewport = {
 export default function RootLayout({ children }) {
     return (
         <html lang="en" suppressHydrationWarning>
-            <body suppressHydrationWarning>{children}</body>
+            <body suppressHydrationWarning>
+                <MonitoringBootstrap />
+                {children}
+            </body>
         </html>
     )
 }

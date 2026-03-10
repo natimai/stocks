@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, Loader2, Clock, X } from 'lucide-react';
+import { apiGet } from '../lib/apiClient';
 
 const HISTORY_KEY = 'consensusai_search_history';
 const MAX_HISTORY = 8;
@@ -64,13 +65,8 @@ export default function CommandPalette({ onSelect }) {
             }
             setLoading(true);
             try {
-                const base = typeof window !== 'undefined' && window.location.hostname === 'localhost'
-                    ? 'http://localhost:8000'
-                    : 'https://quantai-backend-316459358121.europe-west1.run.app';
-                const res = await fetch(`${base}/api/search?q=${encodeURIComponent(query)}`);
-                if (res.ok) {
-                    setResults(await res.json());
-                }
+                const { data } = await apiGet(`/api/search?q=${encodeURIComponent(query)}`, { retries: 1 });
+                if (Array.isArray(data)) setResults(data);
             } catch {
                 /* ignore */
             } finally {

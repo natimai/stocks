@@ -4,9 +4,8 @@ import { auth, googleProvider } from '../../lib/firebase';
 import { signInWithPopup, onAuthStateChanged } from 'firebase/auth';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Activity, Users, Crown, Shield, ArrowLeft, RefreshCw, LogOut, CheckCircle2, XCircle, Clock, Zap } from 'lucide-react';
+import { apiGet, apiPatch } from '../../lib/apiClient';
 
-const API = 'https://quantai-backend-316459358121.europe-west1.run.app';
-const ADMIN_EMAIL = 'netanel18999@gmail.com';
 
 export default function AdminPage() {
     const [user, setUser] = useState(null);
@@ -15,6 +14,7 @@ export default function AdminPage() {
     const [loading, setLoading] = useState(false);
     const [updating, setUpdating] = useState(null); // uid being updated
     const [error, setError] = useState('');
+    const [forbidden, setForbidden] = useState(false);
 
     useEffect(() => {
         const unsub = onAuthStateChanged(auth, (u) => {
@@ -24,43 +24,46 @@ export default function AdminPage() {
         return unsub;
     }, []);
 
-    useEffect(() => {
-        if (user?.email === ADMIN_EMAIL) {
-            fetchUsers();
-        }
-    }, [user]);
-
-    const fetchUsers = async () => {
+    const fetchUsers = React.useCallback(async () => {
+        if (!user) return;
         setLoading(true);
         setError('');
+        setForbidden(false);
         try {
             const token = await user.getIdToken(true);
-            const res = await fetch(`${API}/api/admin/users`, {
-                headers: { Authorization: `Bearer ${token}` }
+            const { data } = await apiGet('/api/admin/users', {
+                authToken: token,
+                retries: 1,
             });
-            if (!res.ok) throw new Error('Failed to fetch users');
-            const data = await res.json();
-            setUsers(data.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')));
+            const rows = Array.isArray(data) ? data : [];
+            setUsers(rows.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')));
         } catch (e) {
-            setError(e.message);
+            if (e?.status === 403) {
+                setForbidden(true);
+            }
+            setError(e.message || 'Failed to fetch users');
         } finally {
             setLoading(false);
         }
-    };
+    }, [user]);
+
+    useEffect(() => {
+        if (user) {
+            fetchUsers();
+        }
+    }, [user, fetchUsers]);
 
     const togglePro = async (uid, currentIsPro) => {
         setUpdating(uid);
         try {
             const token = await user.getIdToken(true);
-            const res = await fetch(`${API}/api/admin/users/${uid}`, {
-                method: 'PATCH',
-                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ isPro: !currentIsPro })
+            await apiPatch(`/api/admin/users/${uid}`, { isPro: !currentIsPro }, {
+                authToken: token,
+                retries: 1,
             });
-            if (!res.ok) throw new Error('Update failed');
             setUsers(prev => prev.map(u => u.uid === uid ? { ...u, isPro: !currentIsPro } : u));
         } catch (e) {
-            setError(e.message);
+            setError(e.message || 'Update failed');
         } finally {
             setUpdating(null);
         }
@@ -94,7 +97,7 @@ export default function AdminPage() {
         );
     }
 
-    if (user.email !== ADMIN_EMAIL) {
+    if (forbidden) {
         return (
             <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-4">
                 <XCircle className="w-12 h-12 text-red-500" />

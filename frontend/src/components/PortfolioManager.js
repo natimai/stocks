@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Trash2, Plus, Layers, Edit2, Check, X, AlertTriangle } from 'lucide-react';
 import { auth } from '../lib/firebase';
 import PortfolioDoctorChat from './PortfolioDoctorChat';
+import { apiDelete, apiGet, apiPost, apiPut } from '../lib/apiClient';
 
 // Returns null when price is unavailable — never show a fake price
 const getMockPrice = (ticker) => null;
@@ -32,27 +33,15 @@ export default function PortfolioManager() {
     const [searchResults, setSearchResults] = useState([]);
     const [showResults, setShowResults] = useState(false);
 
-    const getBaseUrl = () => {
-        return typeof window !== 'undefined' && window.location.hostname === 'localhost'
-            ? 'http://localhost:8000'
-            : 'https://quantai-backend-316459358121.europe-west1.run.app';
-    };
-
     useEffect(() => {
         const uniqueTickers = [...new Set(holdings.map(h => h.ticker))];
         uniqueTickers.forEach(async (t) => {
             if (!fetchedTickers.current.has(t)) {
                 fetchedTickers.current.add(t);
                 try {
-                    const res = await fetch(`${getBaseUrl()}/api/quick-stats/${t}`);
-                    if (res.ok) {
-                        const data = await res.json();
-                        setPrices(prev => ({ ...prev, [t]: data.price }));
-                        setDailyChanges(prev => ({ ...prev, [t]: data.change || 0 }));
-                    } else {
-                        setPrices(prev => ({ ...prev, [t]: getMockPrice(t) }));
-                        setDailyChanges(prev => ({ ...prev, [t]: 0 }));
-                    }
+                    const { data } = await apiGet(`/api/quick-stats/${encodeURIComponent(t)}`, { retries: 1, timeoutMs: 10000 });
+                    setPrices(prev => ({ ...prev, [t]: data?.price ?? getMockPrice(t) }));
+                    setDailyChanges(prev => ({ ...prev, [t]: data?.changePercent ?? 0 }));
                 } catch (e) {
                     setPrices(prev => ({ ...prev, [t]: getMockPrice(t) }));
                     setDailyChanges(prev => ({ ...prev, [t]: 0 }));
@@ -87,12 +76,10 @@ export default function PortfolioManager() {
         if (ticker.trim().length >= 1) {
             const timeout = setTimeout(async () => {
                 try {
-                    const res = await fetch(`${getBaseUrl()}/api/search?q=${ticker}`);
-                    if (res.ok) {
-                        const data = await res.json();
-                        setSearchResults(data);
-                        setShowResults(data.length > 0);
-                    }
+                    const { data } = await apiGet(`/api/search?q=${encodeURIComponent(ticker)}`, { retries: 1, timeoutMs: 10000 });
+                    const normalized = Array.isArray(data) ? data : [];
+                    setSearchResults(normalized);
+                    setShowResults(normalized.length > 0);
                 } catch (e) {
                     console.error("Search failed", e);
                 }
@@ -115,13 +102,8 @@ export default function PortfolioManager() {
         setLoading(true);
         try {
             const token = await auth.currentUser.getIdToken();
-            const res = await fetch(`${getBaseUrl()}/api/portfolio`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setHoldings(data);
-            }
+            const { data } = await apiGet('/api/portfolio', { authToken: token, retries: 1 });
+            setHoldings(Array.isArray(data) ? data : []);
         } catch (e) {
             console.error('Failed to fetch portfolio', e);
         } finally {
@@ -168,28 +150,17 @@ export default function PortfolioManager() {
 
         try {
             const token = await auth.currentUser.getIdToken();
-            const res = await fetch(`${getBaseUrl()}/api/portfolio`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
+            const { data } = await apiPost(
+                '/api/portfolio',
+                {
                     ticker: currentTicker,
                     shares: parsedShares,
-                    average_cost: parsedCost
-                })
-            });
-
-            if (res.ok) {
-                const data = await res.json();
-                // Replace temp ID with actual DB ID
-                setHoldings(prev => prev.map(h => h.id === newItem.id ? data : h));
-            } else {
-                // Revert on failure
-                setHoldings(prev => prev.filter(h => h.id !== newItem.id));
-                setAddError('Failed to save. Please try again.');
-            }
+                    average_cost: parsedCost,
+                },
+                { authToken: token, retries: 1 }
+            );
+            // Replace temp ID with actual DB ID
+            setHoldings(prev => prev.map(h => h.id === newItem.id ? data : h));
         } catch (e) {
             console.error('Add failed', e);
             setHoldings(prev => prev.filter(h => h.id !== newItem.id));
@@ -208,14 +179,10 @@ export default function PortfolioManager() {
 
         try {
             const token = await auth.currentUser.getIdToken();
-            const res = await fetch(`${getBaseUrl()}/api/portfolio/${id}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
+            await apiDelete(`/api/portfolio/${encodeURIComponent(id)}`, {
+                authToken: token,
+                retries: 1,
             });
-
-            if (!res.ok) {
-                setHoldings(previousHoldings); // Revert
-            }
         } catch (e) {
             console.error('Delete failed', e);
             setHoldings(previousHoldings); // Revert
@@ -250,25 +217,16 @@ export default function PortfolioManager() {
         try {
             const token = await auth.currentUser.getIdToken();
             const currentItem = previousHoldings.find(h => h.id === id);
-            const res = await fetch(`${getBaseUrl()}/api/portfolio/${id}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
+            const { data } = await apiPut(
+                `/api/portfolio/${encodeURIComponent(id)}`,
+                {
                     ticker: currentItem.ticker,
                     shares: newShares,
-                    average_cost: newAvgCost
-                })
-            });
-
-            if (!res.ok) {
-                setHoldings(previousHoldings);
-            } else {
-                const data = await res.json();
-                setHoldings(prev => prev.map(h => h.id === id ? data : h));
-            }
+                    average_cost: newAvgCost,
+                },
+                { authToken: token, retries: 1 }
+            );
+            setHoldings(prev => prev.map(h => h.id === id ? data : h));
         } catch (e) {
             console.error('Update failed', e);
             setHoldings(previousHoldings);
@@ -447,11 +405,11 @@ export default function PortfolioManager() {
                                     demoHoldings.forEach(async (item) => {
                                         if (auth.currentUser) {
                                             const token = await auth.currentUser.getIdToken();
-                                            await fetch(`${getBaseUrl()}/api/portfolio`, {
-                                                method: 'POST',
-                                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                                                body: JSON.stringify({ ticker: item.ticker, shares: item.shares, average_cost: item.average_cost })
-                                            });
+                                            await apiPost(
+                                                '/api/portfolio',
+                                                { ticker: item.ticker, shares: item.shares, average_cost: item.average_cost },
+                                                { authToken: token, retries: 0 }
+                                            );
                                         }
                                     });
                                     setHoldings(demoHoldings);

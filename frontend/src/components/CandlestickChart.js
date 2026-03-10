@@ -41,11 +41,13 @@ export default function InteractiveChart({ data, type = 'candlestick', showSMA =
             if (typeof d.date === 'string') {
                 const dateText = d.date.trim();
                 if (dateText.includes('/')) {
-                    const [monthRaw, dayRaw] = dateText.split('/');
+                    const [monthPart, dayPart] = dateText.split('/');
+                    const monthRaw = typeof monthPart === 'string' ? monthPart.trim() : String(monthPart ?? '').trim();
+                    const dayRaw = typeof dayPart === 'string' ? dayPart.trim() : String(dayPart ?? '').trim();
                     if (monthRaw && dayRaw) {
                         const year = new Date().getFullYear();
-                        const paddedMonth = monthRaw.padStart(2, '0');
-                        const paddedDay = dayRaw.padStart(2, '0');
+                        const paddedMonth = monthRaw.slice(0, 2).padStart(2, '0');
+                        const paddedDay = dayRaw.slice(0, 2).padStart(2, '0');
                         return { time: `${year}-${paddedMonth}-${paddedDay}`, open, high, low, close, value: close, volume };
                     }
                 }
@@ -275,7 +277,11 @@ export default function InteractiveChart({ data, type = 'candlestick', showSMA =
                         }
                     }
                     if (setHoverDate) {
-                        setHoverDate(typeof param.time === 'string' ? param.time : new Date(param.time * 1000).toLocaleDateString());
+                        let hoverDate = dateStr || null;
+                        if (!hoverDate && typeof param.time === 'number') {
+                            hoverDate = new Date(param.time * 1000).toLocaleDateString();
+                        }
+                        setHoverDate(hoverDate);
                     }
                 }
             }
@@ -302,7 +308,7 @@ export default function InteractiveChart({ data, type = 'candlestick', showSMA =
                 chartRef.current = null;
             }
         };
-    }, [data, type, showSMA]);
+    }, [data, type, showSMA, setHoverDate, setHoverPrice]);
 
     return (
         <div ref={chartContainerRef} style={{ width: '100%', height: '100%', minHeight: '220px' }} />

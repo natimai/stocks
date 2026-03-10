@@ -1,88 +1,28 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
+import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Activity, ArrowLeft,
     TrendingUp, TrendingDown, Clock, Briefcase, Zap, AlertTriangle, CheckCircle2,
     LayoutDashboard, ScanLine, User, LogOut, Lock, Star, CheckCheck, Plus, Mic, Send, X, Share2
 } from 'lucide-react';
-import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
+import { ResponsiveContainer, Tooltip, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
 import CommandPalette from './CommandPalette';
 import RollingPrice from './RollingPrice';
-import InteractiveChart from './CandlestickChart';
 import { auth, googleProvider } from '../lib/firebase';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
-import PortfolioManager from './PortfolioManager';
+import { apiGet, apiPost, buildApiUrl, generateRequestId } from '../lib/apiClient';
 
-// ─── MOCK DATA (AAPL - Score 77 - BUY - Up) ─────────────────────────────────
-const MOCK = {
-    ticker: 'AAPL',
-    name: 'Apple Inc.',
-    score: 77,
-    recommendation: 'BUY',
-    summary: 'Apple is positioned to benefit from the next AI hardware supercycle. The iPhone 17 Pro refresh cycle, combined with Apple Intelligence feature rollouts, points to sustained ASP expansion and margin improvement through Q2 2026.',
-    price: 213.49,
-    changePercent: 1.2,
-    market_cap: 3280000000000,
-    metrics: {
-        P_E_Ratio: 34.76,
-        P_B_Ratio: 48.2,
-        ROE_pct: 156.1,
-        Debt_to_Equity: 1.76,
-        '5Y_EPS_Growth_Rate_pct': 14.3,
-        PEG_Ratio: 2.19,
-        Free_Cash_Flow_Yield_pct: 3.8,
-        Recent_EPS_Revision_Trend: 'Upward',
-    },
-    technicals: {
-        SMA_50: 198.22,
-        SMA_200: 185.67,
-        RSI_14: 62.4,
-        MACD_Signal: 'Bullish Crossover',
-        Williams_R: -25.5,
-        Volume_Momentum: 'Expanding',
-    },
-    ai_analysis: {
-        sub_scores: { Fundamental: 70, Technical: 88, Sentiment: 72, Macro_Risk: 55 },
-        xai_rationale: {
-            Top_Positive_Drivers: [
-                'RSI at 62.4 — bullish momentum without overbought conditions',
-                'Bullish MACD crossover confirmed on daily timeframe',
-                'FCF yield of 3.8% supports continued buyback program',
-                'Price above both SMA-50 and SMA-200 — healthy trend structure',
-            ],
-            Top_Negative_Drivers: [
-                'P/E of 34.76 is 39% premium to sector median (25.0)',
-                'High D/E ratio of 1.76 limits balance-sheet flexibility',
-                'VIX elevated at 18.2 — macro uncertainty persists',
-                'China revenue risk from tariff escalation cycle',
-            ],
-        },
-        debate: {
-            bull: "Stop obsessing over the headline P/E of 34.76. True market leaders command a premium. Apple's ecosystem monetization — Services ARPU growing 14% YoY, Vision Pro seeding the next platform — justifies every multiple basis point. I'm targeting $240.",
-            bear: "The China drag is real. 19% of revenue from a region where Huawei is clawing back domestic market share, in an environment of escalating US-China trade tensions. Additionally, a P/E of 34.76 at a 39% premium to sector leaves zero margin of safety. Any macro shock and this stock corrects 20%.",
-            quant: "RSI at 62 — momentum positive but not euphoric. MACD bullish crossover confirmed 3 sessions ago with above-average volume (+12%). Williams %R at -25.5 shows buyers in control but approaching short-term overbought. Holding above SMA-50 ($198.22) is the key support level to monitor.",
-            cio: "The debate is balanced. Fundamental richness is real but not disqualifying given the FCF generation. Technical trend is constructive. I am scoring AAPL a 77 — a measured BUY. Position sizing should reflect the valuation risk. Set a stop at $195 (below SMA-50).",
-        },
-    },
-    chartData: (() => {
-        // Generate 90 data points across a mock intraday from ~9:30 AM to 4:00 PM
-        const points = [];
-        let price = 185;
-        const startMinutes = 9 * 60 + 30; // 9:30 AM in minutes
-        for (let i = 0; i < 90; i++) {
-            const totalMins = startMinutes + i * 4; // every 4 minutes → 90 points = ~6 hours
-            const h = Math.floor(totalMins / 60);
-            const m = totalMins % 60;
-            const period = h >= 12 ? 'PM' : 'AM';
-            const h12 = h > 12 ? h - 12 : h === 0 ? 12 : h;
-            const label = `${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${period}`;
-            price = price + Math.sin(i * 0.1) * 0.5 + 0.1 + (Math.random() - 0.48) * 1.5;
-            points.push({ date: label, close: parseFloat(price.toFixed(2)) });
-        }
-        return points;
-    })(),
-};
+const InteractiveChart = dynamic(() => import('./CandlestickChart'), {
+    ssr: false,
+    loading: () => <div className="w-full h-full bg-[#111114] animate-pulse rounded-xl" />,
+});
+
+const PortfolioManager = dynamic(() => import('./PortfolioManager'), {
+    ssr: false,
+    loading: () => <div className="h-40 bg-[#111114] border border-white/10 rounded-2xl animate-pulse" />,
+});
 
 // ─── WATCHLIST HOOK ──────────────────────────────────────────────────
 const WATCHLIST_KEY = 'consensusai_watchlist';
@@ -120,28 +60,78 @@ function useWatchlist(ticker) {
 const fmt = (n) => n != null ? new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 2 }).format(n) : 'N/A';
 const fmtPct = (v) => v != null ? `${v >= 0 ? '+' : ''}${Math.abs(Number(v)).toFixed(2)}%` : 'N/A';
 const fmtVal = (v) => v == null ? 'N/A' : typeof v === 'number' ? Number(v).toFixed(2) : v;
+const DEFAULT_DEBATE = { bull: '', bear: '', quant: '', cio: '' };
 
-// ─── TOOLTIPS ─────────────────────────────────────────────────────────────────
-function ChartTip({ active, payload, trendColor, setHoverPrice, setHoverDate }) {
-    useEffect(() => {
-        if (active && payload && payload.length > 0) {
-            setHoverPrice(payload[0].value);
-            setHoverDate(payload[0].payload?.date);
-        } else {
-            setHoverPrice(null);
-            setHoverDate(null);
-        }
-    }, [active, payload, setHoverPrice, setHoverDate]);
-
-    if (!active || !payload?.length) return null;
-    return (
-        <div style={{ background: '#1E1E24', border: `1px solid ${trendColor}40`, borderRadius: 6, padding: '6px 10px', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}>
-            <span style={{ color: trendColor, fontWeight: 600, fontSize: 13, display: 'block' }}>${Number(payload[0].value).toFixed(2)}</span>
-            <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, display: 'block', marginTop: 2 }}>{payload[0].payload.date}</span>
-        </div>
-    );
+function toFiniteNumber(value) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
 }
 
+function normalizeChartRows(rows) {
+    if (!Array.isArray(rows)) return [];
+    return rows
+        .map((row) => {
+            const close = toFiniteNumber(row?.close ?? row?.value);
+            if (close == null) return null;
+
+            const open = toFiniteNumber(row?.open) ?? close;
+            const high = toFiniteNumber(row?.high) ?? Math.max(open, close);
+            const low = toFiniteNumber(row?.low) ?? Math.min(open, close);
+            const volume = toFiniteNumber(row?.volume) ?? 0;
+            const ts = typeof row?.time === 'number'
+                ? Math.floor(row.time)
+                : (typeof row?._ts === 'number' ? Math.floor(row._ts) : null);
+            let dateLabel = typeof row?.date === 'string' ? row.date : null;
+
+            if (!dateLabel && ts != null) {
+                dateLabel = new Date(ts * 1000).toLocaleTimeString('en-US', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    timeZone: 'America/New_York',
+                });
+            }
+
+            if (!dateLabel && typeof row?.time === 'string' && row.time.trim()) {
+                dateLabel = row.time.trim();
+            }
+
+            if (!dateLabel) {
+                dateLabel = `${new Date().toLocaleDateString('en-US')}`;
+            }
+
+            return {
+                date: dateLabel,
+                _ts: ts,
+                close,
+                open,
+                high,
+                low,
+                volume,
+            };
+        })
+        .filter(Boolean);
+}
+
+function normalizeStockPayload(payload) {
+    if (!payload || typeof payload !== 'object') return null;
+    const analysis = payload.ai_analysis && typeof payload.ai_analysis === 'object' ? payload.ai_analysis : {};
+    const debate = analysis.debate && typeof analysis.debate === 'object' ? analysis.debate : DEFAULT_DEBATE;
+
+    return {
+        ...payload,
+        chartData: normalizeChartRows(payload.chartData),
+        metrics: payload.metrics && typeof payload.metrics === 'object' ? payload.metrics : null,
+        technicals: payload.technicals && typeof payload.technicals === 'object' ? payload.technicals : null,
+        ai_analysis: {
+            ...analysis,
+            sub_scores: analysis.sub_scores && typeof analysis.sub_scores === 'object' ? analysis.sub_scores : null,
+            xai_rationale: analysis.xai_rationale && typeof analysis.xai_rationale === 'object' ? analysis.xai_rationale : null,
+            debate,
+        },
+    };
+}
+
+// ─── TOOLTIPS ─────────────────────────────────────────────────────────────────
 function RadarTip({ active, payload, trendColor }) {
     if (!active || !payload?.length) return null;
     return (
@@ -245,7 +235,7 @@ export default function StockDashboard({ initialTicker, onBack }) {
     const [loading, setLoading] = useState(false);
     const [chartLoading, setChartLoading] = useState(false);
     const [streamMsg, setStreamMsg] = useState('');
-    const [liveDebate, setLiveDebate] = useState({ bull: '', bear: '', quant: '', cio: '' });
+    const [liveDebate, setLiveDebate] = useState(DEFAULT_DEBATE);
 
     // Chart state — driven by timeframe selection
     const [timeframe, setTimeframe] = useState('1M');
@@ -272,16 +262,14 @@ export default function StockDashboard({ initialTicker, onBack }) {
             if (currentUser) {
                 try {
                     const token = await currentUser.getIdToken();
-                    const res = await fetch(
-                        `https://quantai-backend-316459358121.europe-west1.run.app/api/user-profile`,
-                        { headers: { Authorization: `Bearer ${token}` } }
-                    );
-                    if (res.ok) {
-                        const profile = await res.json();
-                        setUserProfile(profile);
-                    }
+                    const { data: profile } = await apiGet('/api/user-profile', {
+                        authToken: token,
+                        retries: 1,
+                    });
+                    setUserProfile(profile && typeof profile === 'object' ? profile : null);
                 } catch (e) {
                     // profile fetch failed — treat as free user
+                    setUserProfile(null);
                 }
             } else {
                 setUserProfile(null);
@@ -329,39 +317,35 @@ export default function StockDashboard({ initialTicker, onBack }) {
     const fetchChart = useRef(null);
     fetchChart.current = async (sym, tf) => {
         const { period, interval } = TIMEFRAME_MAP[tf] || TIMEFRAME_MAP['1M'];
+        const safeSymbol = String(sym || '').trim().toUpperCase();
+        if (!safeSymbol) return;
         setChartLoading(true);
         try {
-            const res = await fetch(`https://quantai-backend-316459358121.europe-west1.run.app/api/chart/${sym}?period=${period}&interval=${interval}`);
-            if (!res.ok) return;
-            const raw = await res.json();
-            if (!Array.isArray(raw) || raw.length === 0) return;
-
-            // Normalize to {date, close} shape expected by the AreaChart
-            const normalized = raw.map(c => ({
-                date: typeof c.time === 'number'
-                    ? new Date(c.time * 1000).toLocaleTimeString('en-US', {
-                        hour: '2-digit', minute: '2-digit',
-                        timeZone: 'America/New_York'
-                    })
-                    : c.time,
-                _ts: typeof c.time === 'number' ? c.time : null, // raw unix timestamp for filtering
-                close: c.close ?? c.value,
-                open: c.open,
-                high: c.high,
-                low: c.low,
-                volume: c.volume,
-            }));
+            const { data: raw } = await apiGet(
+                `/api/chart/${encodeURIComponent(safeSymbol)}?period=${encodeURIComponent(period)}&interval=${encodeURIComponent(interval)}`,
+                { retries: 1, timeoutMs: 12000 }
+            );
+            const normalized = normalizeChartRows(raw);
+            if (normalized.length === 0) {
+                setActiveChartData([]);
+                setDisplayChangePercent(null);
+                return;
+            }
 
             setActiveChartData(normalized);
 
             // Compute change % for this window: (last - first) / first * 100
-            const first = normalized[0]?.close;
-            const last = normalized[normalized.length - 1]?.close;
-            if (first && last && first !== 0) {
+            const first = toFiniteNumber(normalized[0]?.close);
+            const last = toFiniteNumber(normalized[normalized.length - 1]?.close);
+            if (first != null && last != null && first !== 0) {
                 setDisplayChangePercent(((last - first) / first) * 100);
+            } else {
+                setDisplayChangePercent(null);
             }
         } catch (e) {
             console.warn('Chart fetch error:', e);
+            setActiveChartData([]);
+            setDisplayChangePercent(null);
         } finally {
             setChartLoading(false);
         }
@@ -394,23 +378,28 @@ export default function StockDashboard({ initialTicker, onBack }) {
     // ── SEARCH HANDLER ──
     // ── FAST PATH: Load market data only (no auth needed) ──
     const loadStockData = async (selectedTicker) => {
-        if (!selectedTicker) return;
-        setTicker(selectedTicker);
+        const safeTicker = String(selectedTicker || '').trim().toUpperCase();
+        if (!safeTicker) return;
+        setTicker(safeTicker);
         setLoading(true);
         setData(null);
         setAiStarted(false);
         setShowPaywall(false);
-        setLiveDebate({ bull: '', bear: '', quant: '', cio: '' });
+        setLiveDebate(DEFAULT_DEBATE);
         setStreamMsg('');
 
         try {
-            const fastRes = await fetch(`https://quantai-backend-316459358121.europe-west1.run.app/api/quick-stats/${selectedTicker}`);
-            if (!fastRes.ok) throw new Error('Invalid ticker');
-            const fast = await fastRes.json();
-            setData(fast);
+            const { data: fast } = await apiGet(`/api/quick-stats/${encodeURIComponent(safeTicker)}`, {
+                retries: 1,
+                timeoutMs: 12000,
+            });
+            const normalizedFast = normalizeStockPayload(fast);
+            if (!normalizedFast) throw new Error('Invalid ticker');
+
+            setData(normalizedFast);
             const defaultTF = '1M';
             setTimeframe(defaultTF);
-            await fetchChart.current(selectedTicker, defaultTF);
+            await fetchChart.current(safeTicker, defaultTF);
         } catch (err) {
             setStreamMsg('Error: Could not retrieve data. Try another ticker.');
         } finally {
@@ -420,7 +409,8 @@ export default function StockDashboard({ initialTicker, onBack }) {
 
     // ── SLOW PATH: Run AI analysis (requires auth) ──
     const runAiAnalysis = async (selectedTicker, optionalDate = targetDate) => {
-        if (!selectedTicker) return;
+        const safeTicker = String(selectedTicker || '').trim().toUpperCase();
+        if (!safeTicker) return;
 
         let idToken = '';
         if (user) {
@@ -435,16 +425,31 @@ export default function StockDashboard({ initialTicker, onBack }) {
         setStreamMsg('Verifying access & Initializing FinDebate AI Framework...');
 
         try {
-            const baseUrl = typeof window !== 'undefined' && window.location.hostname === 'localhost'
-                ? 'http://localhost:8000'
-                : 'https://quantai-backend-316459358121.europe-west1.run.app';
-            const url = `${baseUrl}/api/analyze/${selectedTicker}` + (optionalDate ? `?date=${optionalDate}` : '');
-            const slowRes = await fetch(url, {
-                headers: { 'Authorization': `Bearer ${idToken}` }
+            const analyzePath = `/api/analyze/${encodeURIComponent(safeTicker)}${optionalDate ? `?date=${encodeURIComponent(optionalDate)}` : ''}`;
+            const slowRes = await fetch(buildApiUrl(analyzePath), {
+                headers: {
+                    'Authorization': `Bearer ${idToken}`,
+                    'X-Request-ID': generateRequestId(),
+                    Accept: 'text/event-stream',
+                },
+                cache: 'no-store',
             });
 
             if (slowRes.status === 403 || slowRes.status === 401) {
                 setShowPaywall(true);
+                setLoading(false);
+                return;
+            }
+
+            if (!slowRes.ok) {
+                let errDetail = 'AI analysis failed.';
+                try {
+                    const errPayload = await slowRes.json();
+                    if (errPayload?.detail) errDetail = `Error: ${errPayload.detail}`;
+                } catch {
+                    // ignore parse errors
+                }
+                setStreamMsg(errDetail);
                 setLoading(false);
                 return;
             }
@@ -454,7 +459,7 @@ export default function StockDashboard({ initialTicker, onBack }) {
                 const decoder = new TextDecoder();
                 let done = false;
                 let buffer = '';
-                let currentDebate = { bull: '', bear: '', quant: '', cio: '' };
+                let currentDebate = { ...DEFAULT_DEBATE };
 
                 while (!done) {
                     const { value, done: readerDone } = await reader.read();
@@ -471,11 +476,16 @@ export default function StockDashboard({ initialTicker, onBack }) {
                                     if (parsed.type === 'status') {
                                         setStreamMsg(parsed.message);
                                     } else if (parsed.type === 'agent_done') {
-                                        currentDebate[parsed.agent] = parsed.text;
-                                        setLiveDebate({ ...currentDebate });
+                                        if (parsed.agent && Object.prototype.hasOwnProperty.call(currentDebate, parsed.agent)) {
+                                            currentDebate[parsed.agent] = parsed.text;
+                                            setLiveDebate({ ...currentDebate });
+                                        }
                                     } else if (parsed.type === 'complete') {
-                                        setData(parsed.data);
-                                        setLiveDebate(parsed.data.ai_analysis.debate || currentDebate);
+                                        const normalized = normalizeStockPayload(parsed.data);
+                                        if (normalized) {
+                                            setData(normalized);
+                                            setLiveDebate(normalized?.ai_analysis?.debate || currentDebate);
+                                        }
                                         setLoading(false);
                                     } else if (parsed.type === 'error') {
                                         setStreamMsg(`Error: ${parsed.message}`);
@@ -531,47 +541,41 @@ export default function StockDashboard({ initialTicker, onBack }) {
 
         try {
             const token = await user.getIdToken();
-            const baseUrl = typeof window !== 'undefined' && window.location.hostname === 'localhost'
-                ? 'http://localhost:8000'
-                : 'https://quantai-backend-316459358121.europe-west1.run.app';
-
-            const res = await fetch(`${baseUrl}/api/chat_agent`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`
-                },
-                body: JSON.stringify({
+            const { data } = await apiPost(
+                '/api/chat_agent',
+                {
                     ticker: display?.ticker || ticker,
                     user_message: messageToSubmit,
                     target_agent: targetAgent,
-                    context_score: display?.score || 50
-                })
-            });
-            if (res.ok) {
-                const data = await res.json();
+                    context_score: display?.score || 50,
+                },
+                {
+                    authToken: token,
+                    retries: 1,
+                    timeoutMs: 20000,
+                }
+            );
 
-                let avatar = '/avatars/The CIO Agent.svg';
-                let name = 'The CIO';
-                let nameColor = 'text-white/80';
+            let avatar = '/avatars/The CIO Agent.svg';
+            let name = 'The CIO';
+            let nameColor = 'text-white/80';
 
-                if (targetAgent === 'Bull') { avatar = '/avatars/The Bull.svg'; name = 'The Bull'; nameColor = 'text-emerald-500'; }
-                if (targetAgent === 'Bear') { avatar = '/avatars/bear.svg'; name = 'The Bear'; nameColor = 'text-red-400'; }
-                if (targetAgent === 'Quant') { avatar = '/avatars/The Quant.svg'; name = 'The Quant'; nameColor = 'text-cyan-400'; }
+            if (targetAgent === 'Bull') { avatar = '/avatars/The Bull.svg'; name = 'The Bull'; nameColor = 'text-emerald-500'; }
+            if (targetAgent === 'Bear') { avatar = '/avatars/bear.svg'; name = 'The Bear'; nameColor = 'text-red-400'; }
+            if (targetAgent === 'Quant') { avatar = '/avatars/The Quant.svg'; name = 'The Quant'; nameColor = 'text-cyan-400'; }
 
-                const agentMsg = {
-                    id: Date.now() + 1,
-                    role: "agent",
-                    name: name,
-                    avatar: avatar,
-                    nameColor: nameColor,
-                    align: "left",
-                    bubbleClass: "bg-[#1E1E24] rounded-2xl rounded-tl-sm text-white/90",
-                    text: data.response,
-                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                };
-                setChatThread(prev => [...prev, agentMsg]);
-            }
+            const agentMsg = {
+                id: Date.now() + 1,
+                role: "agent",
+                name: name,
+                avatar: avatar,
+                nameColor: nameColor,
+                align: "left",
+                bubbleClass: "bg-[#1E1E24] rounded-2xl rounded-tl-sm text-white/90",
+                text: data?.response || 'No response from agent.',
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            };
+            setChatThread(prev => [...prev, agentMsg]);
         } catch (err) {
             console.error(err);
         } finally {
@@ -585,7 +589,8 @@ export default function StockDashboard({ initialTicker, onBack }) {
     const xai = display?.ai_analysis?.xai_rationale || null;
     const { watched, toggle: toggleWatch, pulse: watchPulse } = useWatchlist(display?.ticker || ticker);
     // Use activeChartData (driven by timeframe) instead of static chartData from server
-    const rawChartData = activeChartData.length > 0 ? activeChartData : (display?.chartData || []);
+    const fallbackChartData = normalizeChartRows(display?.chartData);
+    const rawChartData = activeChartData.length > 0 ? activeChartData : fallbackChartData;
 
     // For 1D, trim data to current time THEN pad with null ghost-points to 4:00 PM ET
     // This forces recharts to keep the full trading-day width on the X-axis while
@@ -941,6 +946,7 @@ export default function StockDashboard({ initialTicker, onBack }) {
                             {display?.metadata && (
                                 <div className="mt-4 text-xs font-medium text-white/40 opacity-80 backdrop-blur-sm border border-white/5 rounded-full px-3 py-1.5 bg-white/5 flex items-center gap-2 whitespace-nowrap">
                                     {display.metadata.is_cached
+                                        || display.metadata.cached
                                         ? <><Zap className="w-3.5 h-3.5" /> Generated today</>
                                         : <><Activity className="w-3.5 h-3.5" /> Analyzed live</>}
                                 </div>

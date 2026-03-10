@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Send, Activity, Info, CheckCheck } from 'lucide-react';
+import { X, Send, Activity, CheckCheck } from 'lucide-react';
 import { auth } from '../lib/firebase';
+import { buildApiUrl, generateRequestId } from '../lib/apiClient';
 
 export default function PortfolioDoctorChat({ isOpen, onClose }) {
     const [messages, setMessages] = useState([
@@ -33,12 +34,6 @@ export default function PortfolioDoctorChat({ isOpen, onClose }) {
             setTimeout(() => inputRef.current?.focus(), 100);
         }
     }, [isOpen]);
-
-    const getBaseUrl = () => {
-        return typeof window !== 'undefined' && window.location.hostname === 'localhost'
-            ? 'http://localhost:8000'
-            : 'https://quantai-backend-316459358121.europe-west1.run.app';
-    };
 
     const handleSend = async (e, directMessage = null) => {
         if (e) e.preventDefault();
@@ -72,13 +67,16 @@ export default function PortfolioDoctorChat({ isOpen, onClose }) {
                 parts: [m.text]
             }));
 
-            const response = await fetch(`${getBaseUrl()}/api/portfolio-doctor/chat`, {
+            const response = await fetch(buildApiUrl('/api/portfolio-doctor/chat'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
+                    'Authorization': `Bearer ${token}`,
+                    'X-Request-ID': generateRequestId(),
+                    Accept: 'text/event-stream',
                 },
                 body: JSON.stringify({ messages: formattedHistory }),
+                cache: 'no-store',
             });
 
             if (!response.ok) throw new Error("Network response was not ok");

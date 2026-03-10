@@ -1,5 +1,6 @@
 'use client';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Activity, Search, TrendingUp, TrendingDown, BarChart2,
@@ -8,7 +9,14 @@ import {
 } from 'lucide-react';
 import { auth, googleProvider } from '../lib/firebase';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
-import PortfolioManager from './PortfolioManager';
+import { apiGet, apiPatch } from '../lib/apiClient';
+
+const PortfolioManager = dynamic(() => import('./PortfolioManager'), {
+    ssr: false,
+    loading: () => (
+        <div className="min-h-[220px] rounded-2xl border border-white/10 bg-[#111114] animate-pulse" />
+    ),
+});
 
 // ─── MOCK DATA ──────────────────────────────────────────────────────────────
 const TOP_PICKS_TICKERS = [
@@ -203,11 +211,8 @@ export default function HomeDashboard({ onSearch }) {
             setWatchlist(stored);
             stored.forEach(async ({ ticker }) => {
                 try {
-                    const res = await fetch(`https://quantai-backend-316459358121.europe-west1.run.app/api/quick-stats/${ticker}`);
-                    if (res.ok) {
-                        const d = await res.json();
-                        setWatchlistPrices(prev => ({ ...prev, [ticker]: { price: d.price, change: d.changePercent } }));
-                    }
+                    const { data } = await apiGet(`/api/quick-stats/${ticker}`, { retries: 1 });
+                    setWatchlistPrices(prev => ({ ...prev, [ticker]: { price: data?.price, change: data?.changePercent } }));
                 } catch { /* ignore */ }
             });
         } catch { /* ignore */ }
@@ -230,14 +235,8 @@ export default function HomeDashboard({ onSearch }) {
             if (currentUser) {
                 try {
                     const token = await currentUser.getIdToken();
-                    const res = await fetch(
-                        `https://quantai-backend-316459358121.europe-west1.run.app/api/user-profile`,
-                        { headers: { Authorization: `Bearer ${token}` } }
-                    );
-                    if (res.ok) {
-                        const profile = await res.json();
-                        setUserProfile(profile);
-                    }
+                    const { data } = await apiGet('/api/user-profile', { authToken: token, retries: 1 });
+                    setUserProfile(data || null);
                 } catch (e) {
                     // Ignore errors
                 }
@@ -277,9 +276,7 @@ export default function HomeDashboard({ onSearch }) {
                 const pickResults = await Promise.all(
                     tickersToFetch.map(async ({ ticker, name }) => {
                         try {
-                            const res = await fetch(`https://quantai-backend-316459358121.europe-west1.run.app/api/quick-stats/${ticker}`);
-                            if (!res.ok) throw new Error('fail');
-                            const d = await res.json();
+                            const { data: d } = await apiGet(`/api/quick-stats/${ticker}`, { retries: 1 });
                             const isUp = (d.changePercent ?? 0) >= 0;
                             const spark = (d.chartData || []).slice(-12).map(c => c.close);
 
@@ -304,9 +301,7 @@ export default function HomeDashboard({ onSearch }) {
                 const scanResults = await Promise.all(
                     RECENT_SCANS_TICKERS.map(async (ticker, i) => {
                         try {
-                            const res = await fetch(`https://quantai-backend-316459358121.europe-west1.run.app/api/quick-stats/${ticker}`);
-                            if (!res.ok) throw new Error('fail');
-                            const d = await res.json();
+                            const { data: d } = await apiGet(`/api/quick-stats/${ticker}`, { retries: 1 });
                             const isUp = (d.changePercent ?? 0) >= 0;
                             return {
                                 ticker,
@@ -350,18 +345,9 @@ export default function HomeDashboard({ onSearch }) {
         try {
             const tickers = editPicksInput.split(',').map(s => s.trim().toUpperCase()).filter(s => s.length > 0).slice(0, 5);
             const token = await user.getIdToken();
-            const res = await fetch(`https://quantai-backend-316459358121.europe-west1.run.app/api/user-settings`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ customPicks: tickers })
-            });
-            if (res.ok) {
-                setUserProfile(prev => ({ ...prev, customPicks: tickers }));
-                setIsEditingPicks(false);
-            }
+            await apiPatch('/api/user-settings', { customPicks: tickers }, { authToken: token, retries: 1 });
+            setUserProfile(prev => ({ ...prev, customPicks: tickers }));
+            setIsEditingPicks(false);
         } catch (e) {
             console.error('Failed to save picks', e);
         } finally {
