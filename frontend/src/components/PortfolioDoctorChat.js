@@ -40,12 +40,13 @@ export default function PortfolioDoctorChat({ isOpen, onClose }) {
             : 'https://quantai-backend-316459358121.europe-west1.run.app';
     };
 
-    const handleSend = async (e) => {
-        e.preventDefault();
-        if (!input.trim() || isTyping) return;
+    const handleSend = async (e, directMessage = null) => {
+        if (e) e.preventDefault();
+        const messageToSubmit = directMessage || input;
+        if (!messageToSubmit.trim() || isTyping) return;
 
-        const userText = input.trim();
-        setInput('');
+        const userText = messageToSubmit.trim();
+        if (!directMessage) setInput('');
 
         const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -158,7 +159,7 @@ export default function PortfolioDoctorChat({ isOpen, onClose }) {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+                className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm"
                 onClick={onClose}
             >
                 <motion.div
@@ -166,10 +167,10 @@ export default function PortfolioDoctorChat({ isOpen, onClose }) {
                     animate={{ scale: 1, y: 0 }}
                     exit={{ scale: 0.95, y: 20 }}
                     onClick={e => e.stopPropagation()}
-                    className="bg-black w-full max-w-2xl h-[85vh] max-h-[800px] rounded-3xl overflow-hidden shadow-2xl border border-[#202C33] flex flex-col relative font-sans"
+                    className="bg-black w-full h-[100dvh] sm:h-[85vh] sm:max-h-[800px] sm:max-w-2xl rounded-none sm:rounded-3xl overflow-hidden shadow-2xl border-0 sm:border border-[#202C33] flex flex-col relative font-sans"
                 >
                     {/* Header */}
-                    <div className="bg-[#111114] border-b border-white/10 px-6 py-4 flex items-center justify-between shrink-0">
+                    <div className="bg-[#111114] border-b border-white/10 px-4 sm:px-6 py-4 flex items-center justify-between shrink-0 pt-safe">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full overflow-hidden border border-white/10 shrink-0">
                                 <img src="/avatars/The CIO Agent.svg" alt="Portfolio Doctor" className="w-full h-full object-cover" />
@@ -182,13 +183,13 @@ export default function PortfolioDoctorChat({ isOpen, onClose }) {
                                 </p>
                             </div>
                         </div>
-                        <button onClick={onClose} className="p-2 rounded-full hover:bg-white/10 text-white/50 hover:text-white transition-colors">
+                        <button type="button" onClick={onClose} aria-label="Close chat" className="touch-target p-2 rounded-full hover:bg-white/10 text-white/50 hover:text-white transition-colors">
                             <X className="w-5 h-5" />
                         </button>
                     </div>
 
                     {/* Messages Area */}
-                    <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                    <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
                         {messages.map((msg, i) => {
                             const isUser = msg.role === 'user';
                             return (
@@ -236,13 +237,21 @@ export default function PortfolioDoctorChat({ isOpen, onClose }) {
                         <div ref={messagesEndRef} className="h-2" />
                     </div>
 
+                    {/* Quick Chips */}
+                    <div className="flex gap-2 px-4 sm:px-6 pb-3 pt-4 overflow-x-auto scrollbar-none bg-[#111114] border-t border-white/5">
+                        <button type="button" onClick={(e) => handleSend(e, "Analyze my portfolio risk")} className="touch-target whitespace-nowrap bg-[#2C2C2E] hover:bg-[#3C3C3E] text-[13px] px-4 py-2 rounded-full text-white/80 transition-colors border border-white/10 shadow-sm">Analyze Risk</button>
+                        <button type="button" onClick={(e) => handleSend(e, "What are the weak links in my holdings?")} className="touch-target whitespace-nowrap bg-[#2C2C2E] hover:bg-[#3C3C3E] text-[13px] px-4 py-2 rounded-full text-white/80 transition-colors border border-white/10 shadow-sm">Find Weak Links</button>
+                        <button type="button" onClick={(e) => handleSend(e, "Suggest ways to diversify")} className="touch-target whitespace-nowrap bg-[#2C2C2E] hover:bg-[#3C3C3E] text-[13px] px-4 py-2 rounded-full text-white/80 transition-colors border border-white/10 shadow-sm">Diversification</button>
+                    </div>
+
                     {/* Input Area */}
-                    <form onSubmit={handleSend} className="bg-[#111114] p-4 shrink-0 border-t border-white/5 relative">
+                    <form onSubmit={(e) => handleSend(e)} className="bg-[#111114] px-4 sm:px-4 pt-1 pb-safe shrink-0 relative">
                         <div className="relative flex items-end gap-2 max-w-4xl mx-auto">
                             <input
                                 ref={inputRef}
                                 type="text"
-                                className="flex-1 bg-[#2C2C2E] text-white rounded-full pl-5 pr-12 py-3.5 focus:outline-none focus:ring-1 focus:ring-white/20 text-[15px] placeholder-white/40 shadow-inner"
+                                aria-label="Message the portfolio doctor"
+                                className="flex-1 bg-[#2C2C2E] text-white rounded-full pl-5 pr-12 py-3.5 focus:outline-none focus:ring-1 focus:ring-white/20 text-base sm:text-[15px] placeholder-white/40 shadow-inner"
                                 placeholder="Message the Doctor..."
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
@@ -250,6 +259,7 @@ export default function PortfolioDoctorChat({ isOpen, onClose }) {
                             />
                             <button
                                 type="submit"
+                                aria-label="Send message"
                                 disabled={!input.trim() || isTyping}
                                 className={`absolute right-2 bottom-1.5 p-2 rounded-full transition-all duration-200 ${input.trim() && !isTyping ? 'bg-[#0A84FF] text-white hover:scale-105 shadow-md' : 'bg-transparent text-white/20'
                                     }`}

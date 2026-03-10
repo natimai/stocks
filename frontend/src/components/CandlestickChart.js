@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { createChart, CandlestickSeries, LineSeries, HistogramSeries } from 'lightweight-charts';
 
-export default function InteractiveChart({ data, type = 'candlestick', showSMA = false }) {
+export default function InteractiveChart({ data, type = 'candlestick', showSMA = false, setHoverPrice, setHoverDate }) {
     const chartContainerRef = useRef();
     const chartRef = useRef(null);
 
@@ -65,19 +65,19 @@ export default function InteractiveChart({ data, type = 'candlestick', showSMA =
         const chart = createChart(chartContainerRef.current, {
             layout: {
                 background: { color: 'transparent' },
-                textColor: '#334155', // slate-700
+                textColor: 'rgba(255, 255, 255, 0.78)',
             },
             grid: {
-                vertLines: { color: '#f1f5f9' }, // slate-100
-                horzLines: { color: '#f1f5f9' },
+                vertLines: { color: 'rgba(255, 255, 255, 0.06)' },
+                horzLines: { color: 'rgba(255, 255, 255, 0.06)' },
             },
             timeScale: {
-                borderColor: '#e2e8f0', // slate-200
+                borderColor: 'rgba(255, 255, 255, 0.14)',
                 timeVisible: true, // Enable viewing by hours/minutes
                 secondsVisible: false,
             },
             rightPriceScale: {
-                borderColor: '#e2e8f0',
+                borderColor: 'rgba(255, 255, 255, 0.14)',
             },
             crosshair: {
                 mode: 1, // Magnet mode brings crosshair directly to candles
@@ -179,10 +179,10 @@ export default function InteractiveChart({ data, type = 'candlestick', showSMA =
             left: 12px;
             pointer-events: none;
             border-radius: 6px;
-            background: rgba(255, 255, 255, 0.95);
-            border: 1px solid #e2e8f0;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            color: #1e293b;
+            background: rgba(17, 17, 20, 0.94);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+            color: rgba(255, 255, 255, 0.95);
             font-weight: 500;
             min-width: 120px;
         `;
@@ -198,12 +198,14 @@ export default function InteractiveChart({ data, type = 'candlestick', showSMA =
                 param.point.y > chartContainerRef.current.clientHeight
             ) {
                 toolTip.style.display = 'none';
+                if (setHoverPrice) setHoverPrice(null);
+                if (setHoverDate) setHoverDate(null);
             } else {
                 const dateStr = typeof param.time === 'string' ? param.time : new Date(param.time * 1000).toLocaleString();
                 const dataObj = param.seriesData.get(series);
 
                 if (dataObj) {
-                    let htmlData = `<div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">${dateStr}</div>`;
+                    let htmlData = `<div style="font-size: 11px; color: rgba(255,255,255,0.58); margin-bottom: 4px;">${dateStr}</div>`;
 
                     if (type === 'candlestick' && dataObj.open !== undefined) {
                         const changeColor = dataObj.close >= dataObj.open ? '#10b981' : '#ef4444';
@@ -220,7 +222,7 @@ export default function InteractiveChart({ data, type = 'candlestick', showSMA =
                     // Look for volume data precisely matching this time
                     const volObj = param.seriesData.get(volumeSeries);
                     if (volObj && volObj.value !== undefined) {
-                        htmlData += `<div style="display: flex; justify-content: space-between; margin-top: 4px; border-top: 1px solid #f1f5f9; padding-top: 4px;"><span>Vol:</span> <span>${(volObj.value / 1000).toFixed(1)}K</span></div>`;
+                        htmlData += `<div style="display: flex; justify-content: space-between; margin-top: 4px; border-top: 1px solid rgba(255,255,255,0.12); padding-top: 4px;"><span>Vol:</span> <span>${(volObj.value / 1000).toFixed(1)}K</span></div>`;
                     }
 
                     if (showSMA) {
@@ -228,7 +230,7 @@ export default function InteractiveChart({ data, type = 'candlestick', showSMA =
                         const sma200Obj = sma200Series ? param.seriesData.get(sma200Series) : null;
 
                         if (sma50Obj || sma200Obj) {
-                            htmlData += `<div style="margin-top: 4px; border-top: 1px solid #f1f5f9; padding-top: 4px;">`;
+                            htmlData += `<div style="margin-top: 4px; border-top: 1px solid rgba(255,255,255,0.12); padding-top: 4px;">`;
                             if (sma50Obj) htmlData += `<div style="display: flex; justify-content: space-between; color: #f59e0b;"><span>SMA50:</span> <span>$${sma50Obj.value.toFixed(2)}</span></div>`;
                             if (sma200Obj) htmlData += `<div style="display: flex; justify-content: space-between; color: #8b5cf6;"><span>SMA200:</span> <span>$${sma200Obj.value.toFixed(2)}</span></div>`;
                             htmlData += `</div>`;
@@ -246,6 +248,18 @@ export default function InteractiveChart({ data, type = 'candlestick', showSMA =
                     }
                     toolTip.style.left = left + 'px';
                     toolTip.style.top = param.point.y + 15 + 'px';
+
+                    // Update parent components for RollingPrice sync
+                    if (setHoverPrice) {
+                        if (type === 'candlestick' && dataObj.close !== undefined) {
+                            setHoverPrice(dataObj.close);
+                        } else if (dataObj.value !== undefined) {
+                            setHoverPrice(dataObj.value);
+                        }
+                    }
+                    if (setHoverDate) {
+                        setHoverDate(typeof param.time === 'string' ? param.time : new Date(param.time * 1000).toLocaleDateString());
+                    }
                 }
             }
         });
@@ -253,13 +267,19 @@ export default function InteractiveChart({ data, type = 'candlestick', showSMA =
         chartRef.current = chart;
 
         const handleResize = () => {
-            chart.applyOptions({ width: chartContainerRef.current.clientWidth });
+            chart.applyOptions({
+                width: chartContainerRef.current.clientWidth,
+                height: chartContainerRef.current.clientHeight,
+            });
         };
 
         window.addEventListener('resize', handleResize);
 
         return () => {
             window.removeEventListener('resize', handleResize);
+            if (toolTip.parentElement) {
+                toolTip.parentElement.removeChild(toolTip);
+            }
             if (chartRef.current) {
                 chartRef.current.remove();
                 chartRef.current = null;
@@ -268,6 +288,6 @@ export default function InteractiveChart({ data, type = 'candlestick', showSMA =
     }, [data, type, showSMA]);
 
     return (
-        <div ref={chartContainerRef} style={{ width: '100%', height: '100%', minHeight: '300px' }} />
+        <div ref={chartContainerRef} style={{ width: '100%', height: '100%', minHeight: '220px' }} />
     );
 }

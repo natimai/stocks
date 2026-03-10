@@ -2,12 +2,50 @@
 @tailwind components;
 @tailwind utilities;
 
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
 body {
   @apply text-slate-900 bg-slate-50 transition-colors duration-300;
 }
 
 body.dark {
   @apply text-slate-100 bg-slate-900;
+}
+
+button,
+a,
+[role='button'] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+@media (hover: none) {
+  :where(button, [role='button']):active {
+    transform: scale(0.98);
+  }
+}
+
+:where(button, a, [role='button'], input, select, textarea):focus-visible {
+  outline: 2px solid rgba(0, 200, 5, 0.9);
+  outline-offset: 2px;
+}
+
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
 
 /* Base animations */
@@ -53,4 +91,54 @@ body.dark {
 
 .flash-down {
   animation: flash-red 1s ease-out;
+}
+
+@layer utilities {
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
+  .line-clamp-1 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .pb-safe {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
+  }
+
+  .pt-safe {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 0.25rem);
+  }
+
+  .px-safe {
+    padding-left: calc(env(safe-area-inset-left, 0px) + 0.5rem);
+    padding-right: calc(env(safe-area-inset-right, 0px) + 0.5rem);
+  }
+
+  .touch-target {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .tap-highlight-none {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -3,12 +3,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Activity, ArrowLeft,
-    TrendingUp, TrendingDown, Clock, Search, Briefcase, Zap, AlertTriangle, CheckCircle2,
-    LayoutDashboard, ScanLine, User, LogOut, Lock, Star, CheckCheck, Plus, Mic, Send
+    TrendingUp, TrendingDown, Clock, Briefcase, Zap, AlertTriangle, CheckCircle2,
+    LayoutDashboard, ScanLine, User, LogOut, Lock, Star, CheckCheck, Plus, Mic, Send, X, Share2
 } from 'lucide-react';
 import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
 import CommandPalette from './CommandPalette';
 import RollingPrice from './RollingPrice';
+import InteractiveChart from './CandlestickChart';
 import { auth, googleProvider } from '../lib/firebase';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import PortfolioManager from './PortfolioManager';
@@ -83,6 +84,38 @@ const MOCK = {
     })(),
 };
 
+// ─── WATCHLIST HOOK ──────────────────────────────────────────────────
+const WATCHLIST_KEY = 'consensusai_watchlist';
+
+function useWatchlist(ticker) {
+    const [watched, setWatched] = useState(false);
+    const [pulse, setPulse] = useState(false);
+
+    useEffect(() => {
+        if (!ticker) return;
+        try {
+            const wl = JSON.parse(localStorage.getItem(WATCHLIST_KEY) || '[]');
+            setWatched(wl.some(w => w.ticker === ticker));
+        } catch { /* ignore */ }
+    }, [ticker]);
+
+    const toggle = (name) => {
+        try {
+            const wl = JSON.parse(localStorage.getItem(WATCHLIST_KEY) || '[]');
+            const isIn = wl.some(w => w.ticker === ticker);
+            const next = isIn
+                ? wl.filter(w => w.ticker !== ticker)
+                : [{ ticker, name, addedAt: Date.now() }, ...wl];
+            localStorage.setItem(WATCHLIST_KEY, JSON.stringify(next));
+            setWatched(!isIn);
+            setPulse(true);
+            setTimeout(() => setPulse(false), 600);
+        } catch { /* ignore */ }
+    };
+
+    return { watched, toggle, pulse };
+}
+
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 const fmt = (n) => n != null ? new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 2 }).format(n) : 'N/A';
 const fmtPct = (v) => v != null ? `${v >= 0 ? '+' : ''}${Math.abs(Number(v)).toFixed(2)}%` : 'N/A';
@@ -131,6 +164,79 @@ const TIMEFRAME_MAP = {
     '5Y': { period: '5y', interval: '1mo' },
     'ALL': { period: 'max', interval: '1mo' },
 };
+
+// ─── AI ANALYSIS PROGRESS STEPS ──────────────────────────────────────────────
+const ANALYSIS_STEPS = [
+    { keywords: ['Verifying', 'Initializing', 'access'], label: 'Initializing' },
+    { keywords: ['Fetching', 'Loading', 'market data', 'quick-stats'], label: 'Fetching Market Data' },
+    { keywords: ['Bull', 'Bull agent', 'bullish'], label: 'Bull Agent Analyzing' },
+    { keywords: ['Bear', 'Bear agent', 'bearish'], label: 'Bear Agent Stress-Testing' },
+    { keywords: ['Quant', 'Quant agent', 'technical', 'quantitative'], label: 'Quant Running Models' },
+    { keywords: ['CIO', 'synthesizing', 'synthesis', 'Generating'], label: 'CIO Synthesizing' },
+    { keywords: ['complete', 'done', 'Complete'], label: 'Analysis Complete' },
+];
+
+function getActiveStep(msg) {
+    if (!msg) return 0;
+    const lower = msg.toLowerCase();
+    for (let i = ANALYSIS_STEPS.length - 1; i >= 0; i--) {
+        if (ANALYSIS_STEPS[i].keywords.some(k => lower.includes(k.toLowerCase()))) return i;
+    }
+    return 0;
+}
+
+function AnalysisBanner({ streamMsg, loading, trendColor }) {
+    const activeStep = getActiveStep(streamMsg);
+    if (!loading || !streamMsg) return null;
+    return (
+        <div className="sticky top-[112px] md:top-[73px] z-40 bg-[#000]/80 backdrop-blur-lg border-b border-white/5 px-4 py-3">
+            <div className="max-w-4xl mx-auto">
+                {/* Step dots */}
+                <div className="flex items-center gap-0 mb-2.5 overflow-x-auto scrollbar-none">
+                    {ANALYSIS_STEPS.map((step, i) => (
+                        <React.Fragment key={step.label}>
+                            <div className="flex flex-col items-center shrink-0">
+                                <div
+                                    className="w-2 h-2 rounded-full transition-all duration-500"
+                                    style={{
+                                        backgroundColor: i < activeStep
+                                            ? trendColor
+                                            : i === activeStep
+                                                ? trendColor
+                                                : 'rgba(255,255,255,0.1)',
+                                        boxShadow: i === activeStep ? `0 0 8px ${trendColor}` : 'none',
+                                        transform: i === activeStep ? 'scale(1.4)' : 'scale(1)',
+                                    }}
+                                />
+                            </div>
+                            {i < ANALYSIS_STEPS.length - 1 && (
+                                <div
+                                    className="flex-1 h-px mx-1 min-w-[16px] transition-all duration-700"
+                                    style={{
+                                        backgroundColor: i < activeStep ? trendColor : 'rgba(255,255,255,0.08)',
+                                    }}
+                                />
+                            )}
+                        </React.Fragment>
+                    ))}
+                </div>
+                {/* Active step label + raw message */}
+                <div className="flex items-center gap-2">
+                    <span
+                        className="w-2 h-2 rounded-full animate-pulse shrink-0"
+                        style={{ backgroundColor: trendColor }}
+                    />
+                    <span className="text-xs font-bold uppercase tracking-widest" style={{ color: trendColor }}>
+                        {ANALYSIS_STEPS[activeStep]?.label}
+                    </span>
+                    <span className="text-[11px] text-white/30 truncate hidden sm:inline ml-1">
+                        — {streamMsg}
+                    </span>
+                </div>
+            </div>
+        </div>
+    );
+}
 
 export default function StockDashboard({ initialTicker, onBack }) {
     // ── STATE ──
@@ -261,6 +367,8 @@ export default function StockDashboard({ initialTicker, onBack }) {
         }
     };
 
+    const { watched, toggle: toggleWatch, pulse: watchPulse } = useWatchlist(display?.ticker || ticker);
+
     // Set absolute black background via global class addition ensuring total darkness
     useEffect(() => {
         document.documentElement.style.backgroundColor = '#000000';
@@ -315,18 +423,18 @@ export default function StockDashboard({ initialTicker, onBack }) {
     // ── SLOW PATH: Run AI analysis (requires auth) ──
     const runAiAnalysis = async (selectedTicker, optionalDate = targetDate) => {
         if (!selectedTicker) return;
-        setAiStarted(true);
-        setLoading(true);
-        setStreamMsg('Verifying access & Initializing FinDebate AI Framework...');
 
         let idToken = '';
         if (user) {
             idToken = await user.getIdToken();
         } else {
             setShowPaywall(true);
-            setLoading(false);
             return;
         }
+
+        setAiStarted(true);
+        setLoading(true);
+        setStreamMsg('Verifying access & Initializing FinDebate AI Framework...');
 
         try {
             const baseUrl = typeof window !== 'undefined' && window.location.hostname === 'localhost'
@@ -398,12 +506,13 @@ export default function StockDashboard({ initialTicker, onBack }) {
         }
     };
 
-    const handleChatSubmit = async (e) => {
-        e.preventDefault();
-        if (!chatInput.trim() || !user) return;
+    const handleChatSubmit = async (e, directMessage = null) => {
+        if (e) e.preventDefault();
+        const messageToSubmit = directMessage || chatInput;
+        if (!messageToSubmit.trim() || !user) return;
 
         let targetAgent = "CIO"; // Default
-        const lowerInput = chatInput.toLowerCase();
+        const lowerInput = messageToSubmit.toLowerCase();
         if (lowerInput.includes("@bull")) targetAgent = "Bull";
         else if (lowerInput.includes("@bear")) targetAgent = "Bear";
         else if (lowerInput.includes("@quant")) targetAgent = "Quant";
@@ -412,14 +521,14 @@ export default function StockDashboard({ initialTicker, onBack }) {
         const newMessage = {
             id: Date.now(),
             role: "user",
-            text: chatInput,
+            text: messageToSubmit,
             align: "right",
             bubbleClass: "bg-[#005C4B] rounded-2xl rounded-tr-sm text-white",
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
 
         setChatThread(prev => [...prev, newMessage]);
-        setChatInput("");
+        if (!directMessage) setChatInput("");
         setIsAgentTyping(true);
 
         try {
@@ -436,7 +545,7 @@ export default function StockDashboard({ initialTicker, onBack }) {
                 },
                 body: JSON.stringify({
                     ticker: display?.ticker || ticker,
-                    user_message: chatInput,
+                    user_message: messageToSubmit,
                     target_agent: targetAgent,
                     context_score: display?.score || 50
                 })
@@ -558,76 +667,109 @@ export default function StockDashboard({ initialTicker, onBack }) {
     ] : [];
 
     // Debate Agents Array for WhatsApp/iMessage styles
+    // Use actual current time so messages feel live, not hardcoded demo times
+    const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const debateAgents = [
         {
             key: 'bull',
             avatar: '/avatars/The Bull.svg',
             name: 'The Bull',
-            nameColor: 'text-emerald-500', // Emerald Green
+            nameColor: 'text-emerald-500',
             align: 'left',
             bubbleClass: 'bg-[#1E1E24] rounded-2xl rounded-tl-sm text-white/90',
             text: liveDebate.bull,
-            time: '10:41 AM'
+            time: nowTime
         },
         {
             key: 'bear',
             avatar: '/avatars/bear.svg',
             name: 'The Bear',
-            nameColor: 'text-red-400', // Coral Red
+            nameColor: 'text-red-400',
             align: 'left',
             bubbleClass: 'bg-[#1E1E24] rounded-2xl rounded-tl-sm text-white/90',
             text: liveDebate.bear,
-            time: '10:42 AM'
+            time: nowTime
         },
         {
             key: 'quant',
             avatar: '/avatars/The Quant.svg',
             name: 'The Quant',
-            nameColor: 'text-cyan-400', // Cyan/Blue
+            nameColor: 'text-cyan-400',
             align: 'left',
             bubbleClass: 'bg-[#1E1E24] rounded-2xl rounded-tl-sm text-white/90',
             text: liveDebate.quant,
-            time: '10:44 AM'
+            time: nowTime
         },
         {
             key: 'cio',
             avatar: '/avatars/The CIO Agent.svg',
             name: 'The CIO',
             nameColor: 'text-white/80',
-            align: 'right', // Right Aligned (like user's msg on WhatsApp)
+            align: 'right',
             bubbleClass: 'bg-[#005C4B] rounded-2xl rounded-tr-sm text-white',
             text: liveDebate.cio || (sub ? (display.summary || "Debate Concluded.") : ""),
-            time: '10:45 AM'
+            time: nowTime
         }
     ];
 
     return (
-        <div suppressHydrationWarning className="min-h-screen font-sans bg-[#000000] text-white selection:bg-white/20 pb-20">
+        <div suppressHydrationWarning className="min-h-screen font-sans bg-[#000000] text-white selection:bg-white/20 pb-28 md:pb-20">
 
             {/* ── TOP NAV (Minimalist) ── */}
             <header suppressHydrationWarning className="sticky top-0 z-50 bg-[#000000]/90 backdrop-blur-md border-b-0">
-                <div suppressHydrationWarning className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between gap-4 md:gap-6">
-                    {/* Logo / Back Button */}
-                    <div className="flex items-center gap-3">
-                        {onBack && (
+                <div suppressHydrationWarning className="max-w-4xl mx-auto px-4 py-3 md:py-4 flex flex-col gap-3">
+                    <div className="flex items-center justify-between gap-3">
+                        {/* Logo / Back Button */}
+                        <div className="flex items-center gap-2.5 min-w-0">
+                            {onBack && (
+                                <button
+                                    type="button"
+                                    onClick={onBack}
+                                    aria-label="Back to home"
+                                    className="touch-target flex items-center justify-center rounded-full text-white/40 hover:text-white hover:bg-white/5 transition-colors"
+                                >
+                                    <ArrowLeft className="w-4 h-4" />
+                                </button>
+                            )}
                             <button
-                                onClick={onBack}
-                                className="flex items-center gap-1.5 text-white/40 hover:text-white transition-colors text-sm font-medium group"
+                                type="button"
+                                aria-label="Go to home"
+                                onClick={onBack || (() => window.location.reload())}
+                                className="appearance-none bg-transparent border-0 p-0 flex items-center gap-2.5 group cursor-pointer min-w-0"
                             >
-                                <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
-                                <span className="hidden sm:inline">Home</span>
+                                <div className="shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-colors group-hover:opacity-80">
+                                    <img src="/logo.svg" alt="ConsensusAI Logo" className="w-full h-full object-contain" />
+                                </div>
+                                <span className="truncate font-bold tracking-tight text-lg sm:text-xl text-white/90">Consensus<span className="text-[#00C805]">AI</span></span>
                             </button>
-                        )}
-                        <div className="flex items-center gap-3 group cursor-pointer" onClick={onBack || (() => window.location.reload())}>
-                            <div className="shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center transition-colors group-hover:opacity-80">
-                                <img src="/logo.svg" alt="ConsensusAI Logo" className="w-full h-full object-contain" />
-                            </div>
-                            <span className="hidden sm:inline-block font-bold tracking-tight text-xl text-white/90">Consensus<span className="text-[#00C805]">AI</span></span>
+                        </div>
+
+                        {/* Mobile auth shortcut */}
+                        <div className="md:hidden">
+                            {user ? (
+                                <button
+                                    type="button"
+                                    onClick={handleLogout}
+                                    aria-label="Logout"
+                                    className="touch-target flex items-center justify-center rounded-full text-white/50 hover:text-[#FF5000] hover:bg-white/5 transition-colors"
+                                >
+                                    <LogOut className="w-5 h-5" />
+                                </button>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={handleGoogleLogin}
+                                    aria-label="Sign in"
+                                    className="touch-target flex items-center justify-center rounded-full text-[#00C805] hover:bg-white/5 transition-colors"
+                                >
+                                    <User className="w-5 h-5" />
+                                </button>
+                            )}
                         </div>
                     </div>
 
-                    {/* Search Bar - Taking middle space */}
-                    <div className="flex-1 max-w-sm relative z-50">
+                    {/* Search Bar */}
+                    <div className="w-full md:max-w-sm relative z-50">
                         <div className="opacity-90 hover:opacity-100 transition-opacity">
                             <CommandPalette onSelect={handleSearch} />
                         </div>
@@ -636,6 +778,7 @@ export default function StockDashboard({ initialTicker, onBack }) {
                     {/* Right Nav Links */}
                     <div className="hidden md:flex items-center gap-6 text-sm font-medium">
                         <button
+                            type="button"
                             onClick={() => {
                                 if (!user) {
                                     handleGoogleLogin();
@@ -643,12 +786,13 @@ export default function StockDashboard({ initialTicker, onBack }) {
                                     document.getElementById('portfolio')?.scrollIntoView({ behavior: 'smooth' });
                                 }
                             }}
-                            className="text-white/50 hover:text-white transition-colors"
+                            className="touch-target text-white/50 hover:text-white transition-colors"
                         >
                             Portfolio
                         </button>
-                        <button className="text-white/50 hover:text-white transition-colors">Screener</button>
-                        <button className="text-white/50 hover:text-white transition-colors">History</button>
+                        <span className="text-white/20 cursor-default flex items-center gap-1 text-xs">
+                            Screener <span className="bg-white/10 text-white/30 text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider">Soon</span>
+                        </span>
                         {user ? (
                             <div className="flex items-center gap-3">
                                 <div className="flex items-center gap-2">
@@ -676,9 +820,11 @@ export default function StockDashboard({ initialTicker, onBack }) {
                                         )}
                                     </div>
                                 </div>
-                                <button
-                                    onClick={handleLogout}
-                                    className="p-2 rounded-full hover:bg-white/10 transition-colors text-white/50 hover:text-[#FF5000]"
+                            <button
+                                type="button"
+                                onClick={handleLogout}
+                                aria-label="Logout"
+                                className="touch-target p-2 rounded-full hover:bg-white/10 transition-colors text-white/50 hover:text-[#FF5000]"
                                     title="Logout"
                                 >
                                     <LogOut className="w-4 h-4" />
@@ -686,8 +832,9 @@ export default function StockDashboard({ initialTicker, onBack }) {
                             </div>
                         ) : (
                             <button
+                                type="button"
                                 onClick={handleGoogleLogin}
-                                className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
+                                className="touch-target flex items-center gap-2 min-h-[44px] px-4 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
                             >
                                 <svg className="w-4 h-4" viewBox="0 0 24 24">
                                     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
@@ -702,13 +849,16 @@ export default function StockDashboard({ initialTicker, onBack }) {
                 </div>
             </header>
 
-            <main className="max-w-4xl mx-auto px-4 mt-8 space-y-16">
+            {/* ── AI ANALYSIS PROGRESS BANNER ── */}
+            <AnalysisBanner streamMsg={streamMsg} loading={loading} trendColor={TREND_COLOR} />
+
+            <main className="max-w-4xl mx-auto px-4 mt-6 sm:mt-8 space-y-12 sm:space-y-16">
 
                 {/* ── SECTION 1: THE AI COCKPIT ── */}
                 <section className="flex flex-col md:flex-row justify-between items-start md:items-end gap-8 pt-4">
                     {/* Left: Ticker & Price */}
                     <div className="flex flex-col gap-2 items-start flex-1">
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-start sm:items-center gap-3 min-w-0">
                             <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full overflow-hidden bg-white/10 flex items-center justify-center shrink-0 border border-white/5">
                                 <img
                                     src={`https://img.logokit.com/ticker/${display?.ticker || ticker}?token=pk_frfa213068bb8ffac35321&size=128&fallback=monogram`}
@@ -717,19 +867,44 @@ export default function StockDashboard({ initialTicker, onBack }) {
                                     onError={(e) => { e.target.onerror = null; e.target.style.display = 'none'; }}
                                 />
                             </div>
-                            <h1 className="text-[28px] sm:text-[32px] font-bold tracking-tight text-white/90 leading-none m-0">
+                            <h1 className="text-[24px] sm:text-[32px] font-bold tracking-tight text-white/90 leading-tight sm:leading-none m-0 truncate max-w-[65vw] sm:max-w-none">
                                 {display?.name || display?.ticker || ticker}
                             </h1>
+                            {/* Watchlist Button */}
+                            {(display?.ticker || ticker) && (
+                                <button
+                                    type="button"
+                                    onClick={() => toggleWatch(display?.name || display?.ticker || ticker)}
+                                    aria-label={watched ? 'Remove from watchlist' : 'Add to watchlist'}
+                                    title={watched ? 'Remove from watchlist' : 'Add to watchlist'}
+                                    className="touch-target ml-1 p-1.5 rounded-full transition-all hover:scale-110 active:scale-95"
+                                    style={{
+                                        color: watched ? '#FFD700' : 'rgba(255,255,255,0.2)',
+                                        filter: watchPulse ? 'drop-shadow(0 0 6px #FFD700)' : 'none',
+                                        transition: 'color 0.2s, filter 0.3s',
+                                    }}
+                                >
+                                    <svg
+                                        viewBox="0 0 24 24"
+                                        className="w-6 h-6"
+                                        fill={watched ? 'currentColor' : 'none'}
+                                        stroke="currentColor"
+                                        strokeWidth={1.8}
+                                    >
+                                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                                    </svg>
+                                </button>
+                            )}
                         </div>
 
                         <div className="flex flex-col mt-3">
                             {/* Massive Price with slot-machine animation */}
-                            <div className="text-[52px] sm:text-[64px] font-medium tracking-tight mb-1 leading-none flex items-center" style={{ fontFamily: 'SF Pro Display, Inter, sans-serif' }}>
+                            <div className="text-[40px] sm:text-[56px] font-medium tracking-tight mb-1 leading-none flex items-center" style={{ fontFamily: 'SF Pro Display, Inter, sans-serif' }}>
                                 <RollingPrice price={currentDisplayPrice} />
                             </div>
                             {/* Amount & Change % */}
                             {(currentDisplayChange != null) && (
-                                <div className="text-[17px] font-semibold mt-1 flex items-center gap-1.5" style={{ color: TREND_COLOR }}>
+                                <div className="text-[15px] sm:text-[17px] font-semibold mt-1 flex flex-wrap items-center gap-1.5" style={{ color: TREND_COLOR }}>
                                     <span>
                                         {isUp ? '+' : '-'}${Math.abs((currentDisplayPrice || 0) - (firstClose || currentDisplayPrice || 0)).toFixed(2)}
                                         {' '}({fmtPct(currentDisplayChange)})
@@ -754,11 +929,11 @@ export default function StockDashboard({ initialTicker, onBack }) {
                     {/* Right: The AI Score */}
                     {display?.score != null ? (
                         <div className="flex flex-col items-start md:items-end w-full md:w-auto mt-2 md:mt-0">
-                            <div className="text-[64px] md:text-[80px] leading-none font-bold tracking-tighter" style={{ color: TREND_COLOR }}>
+                            <div className="text-[52px] sm:text-[64px] md:text-[80px] leading-none font-bold tracking-tighter" style={{ color: TREND_COLOR }}>
                                 {display.score}
                             </div>
                             <div className="flex items-center gap-2 sm:gap-3 mt-2 pr-1">
-                                <span className="text-xs sm:text-sm font-medium text-white/40 uppercase tracking-widest">AI Score</span>
+                                <span className="text-xs sm:text-sm font-medium text-white/40 uppercase tracking-widest">AI Score <span className="text-white/25">/ 100</span></span>
                                 <div className="px-3 md:px-4 py-1.5 rounded-full text-[10px] md:text-xs font-bold tracking-widest uppercase shrink-0"
                                     style={{ backgroundColor: TREND_COLOR, color: '#000' }}>
                                     {display.recommendation || 'HOLD'}
@@ -767,8 +942,8 @@ export default function StockDashboard({ initialTicker, onBack }) {
                             {display?.metadata && (
                                 <div className="mt-4 text-xs font-medium text-white/40 opacity-80 backdrop-blur-sm border border-white/5 rounded-full px-3 py-1.5 bg-white/5 flex items-center gap-2 whitespace-nowrap">
                                     {display.metadata.is_cached
-                                        ? <><span>⚡</span> Generated today</>
-                                        : <><span>🤖</span> Analyzed live</>}
+                                        ? <><Zap className="w-3.5 h-3.5" /> Generated today</>
+                                        : <><Activity className="w-3.5 h-3.5" /> Analyzed live</>}
                                 </div>
                             )}
                         </div>
@@ -784,7 +959,7 @@ export default function StockDashboard({ initialTicker, onBack }) {
                             // Locked State for Score
                             <div className="flex flex-col items-start md:items-end w-full md:w-auto mt-6 md:mt-0 relative group">
                                 {/* Blurred Fake Score */}
-                                <div className="text-[64px] md:text-[80px] leading-none font-bold tracking-tighter text-white/10 blur-[8px] select-none pointer-events-none transition-all group-hover:blur-[12px]">
+                                <div className="text-[52px] sm:text-[64px] md:text-[80px] leading-none font-bold tracking-tighter text-white/10 blur-[8px] select-none pointer-events-none transition-all group-hover:blur-[12px]">
                                     85
                                 </div>
                                 <div className="flex items-center gap-2 sm:gap-3 mt-2 pr-1 opacity-20 blur-[3px] select-none pointer-events-none">
@@ -799,11 +974,21 @@ export default function StockDashboard({ initialTicker, onBack }) {
                                         <Lock className="w-4 h-4 text-white/50" />
                                     </div>
                                     {!user ? (
-                                        <button onClick={handleGoogleLogin} className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest bg-[#00C805] text-black px-4 py-2 rounded-full hover:scale-105 transition-transform shadow-[0_0_15px_rgba(0,200,5,0.3)]">
+                                    <button
+                                        type="button"
+                                            onClick={() => setShowPaywall(true)}
+                                            aria-label="Unlock score"
+                                            className="touch-target flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest bg-[#00C805] text-black px-4 py-2 rounded-full hover:scale-105 transition-transform shadow-[0_0_15px_rgba(0,200,5,0.3)]"
+                                        >
                                             Unlock Score
                                         </button>
                                     ) : (
-                                        <button onClick={() => runAiAnalysis(ticker)} className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest bg-[#00C805] text-black px-4 py-2 rounded-full hover:scale-105 transition-transform shadow-[0_0_15px_rgba(0,200,5,0.3)]">
+                                        <button
+                                            type="button"
+                                            onClick={() => runAiAnalysis(ticker)}
+                                            aria-label="Run AI analysis"
+                                            className="touch-target flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest bg-[#00C805] text-black px-4 py-2 rounded-full hover:scale-105 transition-transform shadow-[0_0_15px_rgba(0,200,5,0.3)]"
+                                        >
                                             Run Analysis
                                         </button>
                                     )}
@@ -833,38 +1018,64 @@ export default function StockDashboard({ initialTicker, onBack }) {
 
                 {/* ── SECTION 3: CHARTS ── */}
                 <section>
-                    {/* Time Machine / Date Picker */}
-                    <div className="flex items-center gap-4 mb-4 border border-[#1E1E24] bg-[#111114] px-4 py-2 rounded-xl w-max relative group cursor-pointer transition-colors hover:border-white/20">
-                        <Clock className="w-4 h-4 text-white/40 group-hover:text-white/80" />
-                        <span className="text-xs font-bold uppercase tracking-widest text-white/50">Time Machine</span>
-                        <input
-                            type="date"
-                            className="bg-transparent text-sm text-white/90 outline-none border-none cursor-pointer font-medium"
-                            value={targetDate}
-                            max={new Date().toISOString().substring(0, 10)}
-                            onChange={(e) => {
-                                const newDate = e.target.value;
-                                setTargetDate(newDate);
-                                handleSearch(ticker, newDate);
+                    {/* Time Machine & Share Tools */}
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                        <div className="w-full sm:w-auto flex items-center gap-3 bg-[#111114] border border-[#1E1E24] px-4 py-2 rounded-xl transition-colors hover:border-white/20">
+                            <Clock className="w-4 h-4 text-white/40" />
+                            <span className="text-xs font-bold uppercase tracking-widest text-white/50 hidden sm:inline">Time Machine</span>
+                            <input
+                                type="date"
+                                aria-label="Select analysis date"
+                                className="bg-transparent text-base sm:text-sm text-white/90 outline-none border-none cursor-pointer font-medium [color-scheme:dark] min-h-[44px]"
+                                value={targetDate}
+                                max={new Date().toISOString().substring(0, 10)}
+                                onChange={(e) => {
+                                    const newDate = e.target.value;
+                                    setTargetDate(newDate);
+                                    handleSearch(ticker, newDate);
+                                }}
+                            />
+                            {targetDate && (
+                                <button
+                                    type="button"
+                                    onClick={() => { setTargetDate(''); handleSearch(ticker, ''); }}
+                                    aria-label="Reset date"
+                                    className="touch-target p-1 rounded-full bg-white/5 text-white/40 hover:text-[#FF5000] hover:bg-[#FF5000]/10 transition-colors"
+                                    title="Reset date"
+                                >
+                                    <X className="w-3.5 h-3.5" />
+                                </button>
+                            )}
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={() => {
+                                navigator.clipboard.writeText(window.location.href);
+                                setStreamMsg('Link copied to clipboard!');
+                                setTimeout(() => setStreamMsg(''), 2000);
                             }}
-                        />
-                        {targetDate && (
-                            <div className="flex items-center gap-1.5 bg-[#FF5000]/20 text-[#FF5000] px-2 py-1.5 rounded-md text-[10px] uppercase font-bold tracking-widest border border-[#FF5000]/30 shadow-[0_0_10px_rgba(255,80,0,0.1)]">
-                                <AlertTriangle className="w-3.5 h-3.5" /> Historical View
-                            </div>
-                        )}
+                            aria-label="Share report link"
+                            className="w-full sm:w-auto min-h-[44px] flex items-center justify-center sm:justify-start gap-2 bg-[#111114] border border-[#1E1E24] px-4 py-2 rounded-xl hover:bg-white/5 hover:border-white/20 transition-all text-white/70 hover:text-white"
+                        >
+                            <Share2 className="w-4 h-4 text-[#00C805]" />
+                            <span className="text-xs font-bold uppercase tracking-widest hidden sm:inline">Share Report</span>
+                            <span className="text-xs font-bold uppercase tracking-widest sm:hidden">Share</span>
+                        </button>
                     </div>
 
                     {/* Timeframe Toggles — each click fetches real chart data & recomputes % */}
-                    <div className="flex items-center gap-1 sm:gap-2 mb-6 overflow-x-auto pb-2 scrollbar-none w-full border-b border-[#1E1E24] pb-4">
+                    <div className="flex items-center gap-1 sm:gap-2 mb-6 overflow-x-auto scrollbar-none w-full border-b border-[#1E1E24] pb-4">
                         {['1D', '1W', '1M', '3M', 'YTD', '1Y', '5Y', 'ALL'].map(tf => (
-                            <button key={tf}
+                            <button
+                                key={tf}
+                                type="button"
                                 onClick={() => {
                                     setTimeframe(tf);
                                     const sym = display?.ticker || ticker;
                                     fetchChart.current(sym, tf);
                                 }}
-                                className={`px-4 py-2 rounded-lg text-[13px] font-bold transition-all shrink-0
+                                className={`min-h-[44px] px-4 py-2 rounded-lg text-[13px] font-bold transition-all shrink-0
                                     ${timeframe === tf ? 'text-black bg-white shadow-sm' : 'text-white/40 hover:text-white/80 hover:bg-white/5 bg-transparent'}`}
                             >
                                 {tf}
@@ -873,58 +1084,28 @@ export default function StockDashboard({ initialTicker, onBack }) {
                     </div>
 
                     {/* Minimalist Area Chart */}
-                    <div className="h-[240px] sm:h-[300px] w-full relative">
+                    <div className="h-[220px] sm:h-[280px] md:h-[320px] w-full relative">
                         {chartLoading && (
                             <div className="absolute inset-0 flex items-center justify-center z-10">
                                 <Activity className="w-5 h-5 animate-pulse text-white/30" />
                             </div>
                         )}
                         {chartData && chartData.length > 0 ? (
-                            <ResponsiveContainer width="100%" height="100%">
-                                <LineChart
+                            <div className="w-full h-full relative z-0" onMouseLeave={() => { setHoverPrice(null); setHoverDate(null); }}>
+                                <InteractiveChart
                                     data={chartData}
-                                    margin={{ top: 10, right: 0, left: 0, bottom: 0 }}
-                                    onMouseLeave={() => {
-                                        setHoverPrice(null);
-                                        setHoverDate(null);
-                                    }}
-                                >
-                                    <XAxis
-                                        dataKey="date"
-                                        hide={true} // Cleanest SoFi vibe: no x-axis text by default
-                                    />
-                                    <YAxis
-                                        domain={['auto', 'auto']}
-                                        hide={true}
-                                    />
-                                    <Tooltip
-                                        cursor={{ stroke: 'rgba(255,255,255,0.15)', strokeDasharray: '4 4' }}
-                                        content={
-                                            <ChartTip
-                                                trendColor={TREND_COLOR}
-                                                setHoverPrice={setHoverPrice}
-                                                setHoverDate={setHoverDate}
-                                            />
-                                        }
-                                        position={{ y: 0 }}
-                                    />
-                                    <Line
-                                        type="monotone"
-                                        dataKey="close"
-                                        stroke={TREND_COLOR}
-                                        strokeWidth={2}
-                                        dot={false}
-                                        activeDot={{ r: 4, fill: TREND_COLOR, stroke: '#000', strokeWidth: 2 }}
-                                        isAnimationActive={false}
-                                        connectNulls={false}
-                                    />
-                                </LineChart>
-                            </ResponsiveContainer>
-                        ) : (
-                            <div className="absolute inset-0 flex items-center justify-center">
-                                <Activity className="w-6 h-6 animate-pulse text-white/20" />
+                                    type="candlestick"
+                                    showSMA={true}
+                                    setHoverPrice={setHoverPrice}
+                                    setHoverDate={setHoverDate}
+                                />
                             </div>
-                        )}
+                        ) : !chartLoading ? (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                                <Activity className="w-6 h-6 text-white/20" />
+                                <p className="text-xs text-white/20 font-medium">Chart data unavailable</p>
+                            </div>
+                        ) : null}
                     </div>
                 </section>
 
@@ -934,16 +1115,16 @@ export default function StockDashboard({ initialTicker, onBack }) {
                         {/* Column 1: Fundamentals */}
                         {display?.metrics && (
                             <div className="space-y-4">
-                                <h3 className="text-xs font-bold uppercase tracking-widest text-white/40 mb-2">Fundamentals</h3>
+                                <h3 className="text-xs font-bold uppercase tracking-widest text-white/50 mb-2">Fundamentals</h3>
                                 {[
                                     { label: 'Market Cap', val: `$${fmt(display?.market_cap)}` },
                                     { label: 'P/E Ratio', val: fmtVal(display?.metrics?.P_E_Ratio) },
-                                    { label: 'P/B Ratio', val: fmtVal(display?.metrics?.P_E_Ratio) },
+                                    { label: 'P/B Ratio', val: fmtVal(display?.metrics?.P_B_Ratio) },
                                     { label: 'PEG Ratio', val: fmtVal(display?.metrics?.PEG_Ratio) },
                                     { label: 'D/E Ratio', val: fmtVal(display?.metrics?.Debt_to_Equity) },
                                 ].map(m => (
                                     <div key={m.label} className="flex justify-between items-center text-sm">
-                                        <span className="text-white/50">{m.label}</span>
+                                        <span className="text-white/60">{m.label}</span>
                                         <span className="font-medium">{m.val}</span>
                                     </div>
                                 ))}
@@ -953,7 +1134,7 @@ export default function StockDashboard({ initialTicker, onBack }) {
                         {/* Column 2: Technicals */}
                         {display?.technicals && (
                             <div className="space-y-4">
-                                <h3 className="text-xs font-bold uppercase tracking-widest text-white/40 mb-2">Technicals</h3>
+                                <h3 className="text-xs font-bold uppercase tracking-widest text-white/50 mb-2">Technicals</h3>
                                 {[
                                     { label: 'SMA 50', val: `$${fmtVal(display?.technicals?.SMA_50)}` },
                                     { label: 'SMA 200', val: `$${fmtVal(display?.technicals?.SMA_200)}` },
@@ -962,7 +1143,7 @@ export default function StockDashboard({ initialTicker, onBack }) {
                                     { label: 'Williams %R', val: fmtVal(display?.technicals?.Williams_R) },
                                 ].map(m => (
                                     <div key={m.label} className="flex justify-between items-center text-sm">
-                                        <span className="text-white/50">{m.label}</span>
+                                        <span className="text-white/60">{m.label}</span>
                                         <span className="font-medium text-right">{m.val}</span>
                                     </div>
                                 ))}
@@ -972,7 +1153,7 @@ export default function StockDashboard({ initialTicker, onBack }) {
                         {/* Column 3: Radar Chart */}
                         {radarData.length > 0 && (
                             <div className="flex flex-col items-center justify-center">
-                                <h3 className="text-xs font-bold uppercase tracking-widest text-white/40 mb-0 self-start md:self-center">Vector Analysis</h3>
+                                <h3 className="text-xs font-bold uppercase tracking-widest text-white/50 mb-0 self-start md:self-center">Vector Analysis</h3>
                                 <div className="w-full h-[180px]">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <RadarChart cx="50%" cy="50%" outerRadius="65%" data={radarData}>
@@ -1034,7 +1215,7 @@ export default function StockDashboard({ initialTicker, onBack }) {
                         <p className="text-sm text-white/50 mt-1">Live synthesis from autonomous specialist agents.</p>
                     </div>
 
-                    <div className="bg-black font-sans sm:rounded-3xl overflow-hidden shadow-2xl flex flex-col h-[700px] border border-white/5 relative">
+                    <div className="bg-black font-sans sm:rounded-3xl overflow-hidden shadow-2xl flex flex-col h-[calc(100dvh-11rem)] min-h-[340px] sm:min-h-[460px] max-h-[760px] border border-white/5 relative">
                         {/* Chat Header */}
                         <div className="bg-[#202C33] px-4 py-3 flex items-center gap-3 shadow-md z-10 shrink-0">
                             <div className="w-10 h-10 rounded-full bg-[#111114] flex items-center justify-center shrink-0 border border-white/10 relative overflow-hidden">
@@ -1042,7 +1223,7 @@ export default function StockDashboard({ initialTicker, onBack }) {
                                 <img src="/avatars/The CIO Agent.svg" alt="" className="absolute bottom-0 right-0 w-[55%] h-[55%] object-cover" />
                             </div>
                             <div className="flex flex-col">
-                                <span className="text-white/90 font-medium text-[15px]">Quant Strategy Committee</span>
+                                <span className="text-white/90 font-medium text-[15px]">AI Strategy Committee</span>
                                 <span className="text-white/50 text-[13px]">4 participants</span>
                             </div>
                         </div>
@@ -1063,11 +1244,11 @@ export default function StockDashboard({ initialTicker, onBack }) {
                                         </p>
                                         <div className="flex flex-col gap-3 w-full max-w-[240px]">
                                             {!user ? (
-                                                <button onClick={handleGoogleLogin} className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-[#00C805] hover:bg-[#00e005] text-black font-bold text-[15px] transition-all shadow-[0_0_20px_rgba(0,200,5,0.2)] hover:scale-[1.03]">
+                                                <button type="button" aria-label="Sign in to access live debate" onClick={() => setShowPaywall(true)} className="touch-target flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-[#00C805] hover:bg-[#00e005] text-black font-bold text-[15px] transition-all shadow-[0_0_20px_rgba(0,200,5,0.2)] hover:scale-[1.03]">
                                                     <Zap className="w-4 h-4" /> Sign In to Access
                                                 </button>
                                             ) : (
-                                                <button onClick={() => runAiAnalysis(ticker)} className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-[#00C805] hover:bg-[#00e005] text-black font-bold text-[15px] transition-all shadow-[0_0_20px_rgba(0,200,5,0.2)] hover:scale-[1.03]" disabled={showPaywall}>
+                                                <button type="button" aria-label="Start live debate" onClick={() => runAiAnalysis(ticker)} className="touch-target flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-[#00C805] hover:bg-[#00e005] text-black font-bold text-[15px] transition-all shadow-[0_0_20px_rgba(0,200,5,0.2)] hover:scale-[1.03]" disabled={showPaywall}>
                                                     <Zap className="w-4 h-4" /> Start Live Debate
                                                 </button>
                                             )}
@@ -1138,9 +1319,15 @@ export default function StockDashboard({ initialTicker, onBack }) {
                                             transition={{ duration: 0.35, ease: "easeOut" }}
                                             className={`flex gap-2.5 w-full items-end mt-4 ${isRight ? 'flex-row-reverse' : 'flex-row'}`}
                                         >
-                                            <div className="w-8 h-8 rounded-full overflow-hidden shrink-0">
-                                                <img src={msg.avatar} alt={msg.name} className="w-full h-full object-cover" />
-                                            </div>
+                                            {isRight ? (
+                                                <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 bg-[#0A84FF]/20 border border-[#0A84FF]/30 flex items-center justify-center">
+                                                    <User className="w-4 h-4 text-[#0A84FF]" />
+                                                </div>
+                                            ) : (
+                                                <div className="w-8 h-8 rounded-full overflow-hidden shrink-0">
+                                                    <img src={msg.avatar} alt={msg.name} className="w-full h-full object-cover" />
+                                                </div>
+                                            )}
 
                                             <div className={`flex flex-col max-w-[75%] ${isRight ? 'items-end' : 'items-start'}`}>
                                                 {!isRight && (
@@ -1182,25 +1369,33 @@ export default function StockDashboard({ initialTicker, onBack }) {
                             </AnimatePresence>
                         </div>
 
+                        {/* Quick Chips */}
+                        <div className="flex gap-2 px-4 pb-2 pt-2 overflow-x-auto scrollbar-none bg-[#202C33] border-b border-white/5">
+                            <button type="button" onClick={(e) => handleChatSubmit(e, "@bull What are the upside catalysts?")} className="touch-target whitespace-nowrap bg-[#2A3942] hover:bg-[#344550] text-xs px-3 py-1.5 rounded-full text-white/70 transition-colors">Ask the Bull</button>
+                            <button type="button" onClick={(e) => handleChatSubmit(e, "@bear What are the macro risks?")} className="touch-target whitespace-nowrap bg-[#2A3942] hover:bg-[#344550] text-xs px-3 py-1.5 rounded-full text-white/70 transition-colors">Assess Risks</button>
+                            <button type="button" onClick={(e) => handleChatSubmit(e, "@quant What are the key technical levels?")} className="touch-target whitespace-nowrap bg-[#2A3942] hover:bg-[#344550] text-xs px-3 py-1.5 rounded-full text-white/70 transition-colors">Technical Outlook</button>
+                        </div>
+
                         {/* Interactive Input Area */}
-                        <form onSubmit={handleChatSubmit} className="bg-[#202C33] px-3 py-3 flex items-center gap-2 sm:gap-3 shrink-0">
-                            <button type="button" className="p-1.5 text-white/40 hover:text-white transition-colors">
+                        <form onSubmit={(e) => handleChatSubmit(e)} className="bg-[#202C33] px-3 pb-safe pt-1 flex items-center gap-2 sm:gap-3 shrink-0">
+                            <button type="button" aria-label="Add attachment (coming soon)" className="touch-target p-1.5 text-white/40 hover:text-white transition-colors">
                                 <Plus className="w-6 h-6" />
                             </button>
                             <input
                                 type="text"
-                                className="flex-1 bg-[#2A3942] rounded-full px-4 py-2 sm:py-2.5 text-[14px] sm:text-[15px] text-white/90 border border-transparent focus:outline-none focus:border-white/20 transition-colors shadow-inner placeholder-white/30"
+                                aria-label="Message the AI committee"
+                                className="flex-1 bg-[#2A3942] rounded-full px-4 py-2 sm:py-2.5 text-base sm:text-[15px] text-white/90 border border-transparent focus:outline-none focus:border-white/20 transition-colors shadow-inner placeholder-white/30"
                                 placeholder="Message @quant, @bull, etc..."
                                 value={chatInput}
                                 onChange={(e) => setChatInput(e.target.value)}
                                 disabled={isAgentTyping || !user}
                             />
                             {chatInput.trim() ? (
-                                <button type="submit" disabled={isAgentTyping} className="p-1.5 text-[#00C805] hover:scale-110 transition-transform">
+                                <button type="submit" aria-label="Send message" disabled={isAgentTyping} className="touch-target p-1.5 text-[#00C805] hover:scale-110 transition-transform">
                                     <Send className="w-5 h-5 sm:w-6 sm:h-6" />
                                 </button>
                             ) : (
-                                <button type="button" className="p-1.5 text-white/40 hover:text-white transition-colors">
+                                <button type="button" aria-label="Voice input (coming soon)" className="touch-target p-1.5 text-white/40 hover:text-white transition-colors">
                                     <Mic className="w-5 h-5 sm:w-6 sm:h-6" />
                                 </button>
                             )}
@@ -1228,21 +1423,21 @@ export default function StockDashboard({ initialTicker, onBack }) {
                                 Advanced multi-agent framework analyzing quantitative and fundamental market structures in real-time.
                             </p>
                         </div>
-                        <div className="flex gap-16">
+                        <div className="flex flex-col sm:flex-row gap-10 sm:gap-16">
                             <div>
                                 <h4 className="text-xs font-bold uppercase tracking-widest text-white/50 mb-4">Platform</h4>
                                 <ul className="space-y-3 text-sm text-white/40">
-                                    <li><button className="hover:text-white transition-colors">Screener</button></li>
-                                    <li><button className="hover:text-white transition-colors">Market Map</button></li>
-                                    <li><button className="hover:text-white transition-colors">Agent Logs</button></li>
+                                    <li><span className="flex items-center gap-1.5">Screener <span className="text-[9px] bg-white/5 text-white/25 px-1.5 py-0.5 rounded-full">Coming Soon</span></span></li>
+                                    <li><span className="flex items-center gap-1.5">Market Map <span className="text-[9px] bg-white/5 text-white/25 px-1.5 py-0.5 rounded-full">Coming Soon</span></span></li>
+                                    <li><span className="flex items-center gap-1.5">Agent Logs <span className="text-[9px] bg-white/5 text-white/25 px-1.5 py-0.5 rounded-full">Coming Soon</span></span></li>
                                 </ul>
                             </div>
                             <div>
                                 <h4 className="text-xs font-bold uppercase tracking-widest text-white/50 mb-4">Account</h4>
                                 <ul className="space-y-3 text-sm text-white/40">
-                                    <li><button className="hover:text-white transition-colors">Settings</button></li>
-                                    <li><button className="hover:text-white transition-colors">Billing</button></li>
-                                    <li><button className="hover:text-white transition-colors">API Keys</button></li>
+                                    <li><span className="flex items-center gap-1.5">Settings <span className="text-[9px] bg-white/5 text-white/25 px-1.5 py-0.5 rounded-full">Coming Soon</span></span></li>
+                                    <li><button type="button" onClick={() => document.getElementById('portfolio')?.scrollIntoView({ behavior: 'smooth' })} className="touch-target hover:text-white transition-colors">Portfolio</button></li>
+                                    <li><span className="flex items-center gap-1.5">API Keys <span className="text-[9px] bg-white/5 text-white/25 px-1.5 py-0.5 rounded-full">Coming Soon</span></span></li>
                                 </ul>
                             </div>
                         </div>
@@ -1291,18 +1486,19 @@ export default function StockDashboard({ initialTicker, onBack }) {
                                 <div className="max-w-sm mx-auto space-y-4 relative z-10">
                                     {!user ? (
                                         <button
+                                            type="button"
                                             onClick={handleGoogleLogin}
                                             className="w-full flex items-center justify-center gap-2 py-4 rounded-xl text-black font-bold text-lg bg-[#00C805] hover:bg-[#00e005] transition-all shadow-[0_0_20px_rgba(0,200,5,0.2)] hover:shadow-[0_0_30px_rgba(0,200,5,0.3)] transform hover:scale-[1.02]"
                                         >
                                             Get 1 Free Analysis
                                         </button>
                                     ) : (
-                                        <button
-                                            onClick={() => window.location.href = '#upgrade'}
+                                        <a
+                                            href="mailto:netanel18999@gmail.com?subject=ConsensusAI Pro Upgrade"
                                             className="w-full flex items-center justify-center gap-2 py-4 rounded-xl text-black font-bold text-lg bg-[#00C805] hover:bg-[#00e005] transition-all shadow-[0_0_20px_rgba(0,200,5,0.2)] hover:shadow-[0_0_30px_rgba(0,200,5,0.3)] transform hover:scale-[1.02]"
                                         >
                                             Unlock Unlimited Access
-                                        </button>
+                                        </a>
                                     )}
                                 </div>
                             </div>
@@ -1311,6 +1507,52 @@ export default function StockDashboard({ initialTicker, onBack }) {
                 </AnimatePresence>
 
             </main>
+
+            {/* ── MOBILE BOTTOM NAVIGATION ── */}
+            <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#000000]/95 backdrop-blur-xl border-t border-white/10 flex items-center justify-around px-2 pb-safe">
+                <button
+                    type="button"
+                    onClick={onBack || (() => window.location.reload())}
+                    aria-label="Go to home dashboard"
+                    className="touch-target flex flex-col items-center justify-center gap-1 py-2.5 px-4 text-white/40 hover:text-white transition-colors"
+                >
+                    <LayoutDashboard className="w-5 h-5" />
+                    <span className="text-[10px] font-medium">Home</span>
+                </button>
+                <button
+                    type="button"
+                    onClick={() => {
+                        if (!user) handleGoogleLogin();
+                        else document.getElementById('portfolio')?.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    aria-label="Open portfolio"
+                    className="touch-target flex flex-col items-center justify-center gap-1 py-2.5 px-4 text-white/40 hover:text-white transition-colors"
+                >
+                    <Briefcase className="w-5 h-5" />
+                    <span className="text-[10px] font-medium">Portfolio</span>
+                </button>
+                {user ? (
+                    <button
+                        type="button"
+                        onClick={handleLogout}
+                        aria-label="Sign out"
+                        className="touch-target flex flex-col items-center justify-center gap-1 py-2.5 px-4 text-white/40 hover:text-[#FF5000] transition-colors"
+                    >
+                        <LogOut className="w-5 h-5" />
+                        <span className="text-[10px] font-medium">Sign Out</span>
+                    </button>
+                ) : (
+                    <button
+                        type="button"
+                        onClick={handleGoogleLogin}
+                        aria-label="Sign in"
+                        className="touch-target flex flex-col items-center justify-center gap-1 py-2.5 px-4 text-[#00C805] transition-colors"
+                    >
+                        <User className="w-5 h-5" />
+                        <span className="text-[10px] font-medium">Sign In</span>
+                    </button>
+                )}
+            </nav>
         </div >
     );
 }

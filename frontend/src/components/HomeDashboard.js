@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     Activity, Search, TrendingUp, TrendingDown, BarChart2,
     Zap, Scale, Clock, ArrowRight, ChevronRight, Sparkles,
-    LayoutDashboard, ScanLine, Briefcase, User, LogOut, Lock
+    LayoutDashboard, ScanLine, Briefcase, User, LogOut, Lock, X
 } from 'lucide-react';
 import { auth, googleProvider } from '../lib/firebase';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
@@ -100,9 +100,9 @@ function TypewriterText({ suggestions }) {
     }, [displayed, phase, index, suggestions]);
 
     return (
-        <span className="text-white/30 text-sm font-normal">
+        <span className="text-white/50 text-sm font-normal">
             {displayed}
-            <span className="inline-block w-px h-3.5 bg-white/30 ml-0.5 animate-pulse align-middle" />
+            <span className="inline-block w-px h-3.5 bg-white/50 ml-0.5 animate-pulse align-middle" />
         </span>
     );
 }
@@ -120,7 +120,15 @@ function StockCard({ stock, onSearch, index }) {
             transition={{ duration: 0.45, delay: index * 0.1, ease: [0.22, 1, 0.36, 1] }}
             whileHover={{ y: -3, transition: { duration: 0.2 } }}
             onClick={() => onSearch(stock.ticker)}
-            className="bg-[#111114] rounded-2xl p-5 cursor-pointer flex-shrink-0 w-[220px] md:w-auto"
+            onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onSearch(stock.ticker);
+                }
+            }}
+            role="button"
+            tabIndex={0}
+            className="bg-[#111114] rounded-2xl p-5 cursor-pointer flex-shrink-0 w-[240px] sm:w-[220px] md:w-auto min-h-[220px] active:scale-[0.99] transition-transform"
             style={{ border: '1px solid rgba(255,255,255,0.05)' }}
         >
             {/* Top row */}
@@ -186,6 +194,24 @@ export default function HomeDashboard({ onSearch }) {
     const [query, setQuery] = useState('');
     const [isFocused, setIsFocused] = useState(false);
     const inputRef = useRef(null);
+    const WATCHLIST_KEY = 'consensusai_watchlist';
+
+    // Load watchlist from localStorage + fetch prices
+    useEffect(() => {
+        try {
+            const stored = JSON.parse(localStorage.getItem(WATCHLIST_KEY) || '[]');
+            setWatchlist(stored);
+            stored.forEach(async ({ ticker }) => {
+                try {
+                    const res = await fetch(`https://quantai-backend-316459358121.europe-west1.run.app/api/quick-stats/${ticker}`);
+                    if (res.ok) {
+                        const d = await res.json();
+                        setWatchlistPrices(prev => ({ ...prev, [ticker]: { price: d.price, change: d.changePercent } }));
+                    }
+                } catch { /* ignore */ }
+            });
+        } catch { /* ignore */ }
+    }, []);
     const [livePicks, setLivePicks] = useState(null);   // null = loading
     const [liveScans, setLiveScans] = useState(null);
     const [user, setUser] = useState(null);
@@ -194,6 +220,8 @@ export default function HomeDashboard({ onSearch }) {
     const [isEditingPicks, setIsEditingPicks] = useState(false);
     const [editPicksInput, setEditPicksInput] = useState('');
     const [isSavingPicks, setIsSavingPicks] = useState(false);
+    const [watchlist, setWatchlist] = useState([]);
+    const [watchlistPrices, setWatchlistPrices] = useState({});
 
     // Track Auth State and fetch profile
     useEffect(() => {
@@ -285,10 +313,10 @@ export default function HomeDashboard({ onSearch }) {
                                 price: d.price ?? 0,
                                 score: d.score ?? 70,
                                 signal: d.recommendation ?? (isUp ? 'BUY' : 'HOLD'),
-                                ago: `${(i + 1) * 3} mins ago`,
+                                change: d.changePercent ?? 0,
                             };
                         } catch {
-                            return { ticker, price: null, score: 70, signal: 'BUY', ago: `${(i + 1) * 3} mins ago` };
+                            return { ticker, price: null, score: 70, signal: 'BUY', change: 0 };
                         }
                     })
                 );
@@ -314,7 +342,7 @@ export default function HomeDashboard({ onSearch }) {
     );
 
     const displayPicks = livePicks ?? TOP_PICKS_TICKERS.map(t => ({ ...t, price: null, change: 0, score: 70, signal: 'BUY', sparkline: [] }));
-    const displayScans = liveScans ?? RECENT_SCANS_TICKERS.map((t, i) => ({ ticker: t, price: null, score: 70, signal: 'BUY', ago: `${(i + 1) * 3} mins ago` }));
+    const displayScans = liveScans ?? RECENT_SCANS_TICKERS.map((t) => ({ ticker: t, price: null, score: 70, signal: 'BUY', change: 0 }));
 
     const handleSavePicks = async () => {
         if (!user || !userProfile?.isPro) return;
@@ -358,7 +386,7 @@ export default function HomeDashboard({ onSearch }) {
     }, []);
 
     return (
-        <div className="min-h-screen bg-[#000000] text-white font-sans selection:bg-white/20" suppressHydrationWarning>
+        <div className="min-h-screen bg-[#000000] text-white font-sans selection:bg-white/20 pb-28 md:pb-0" suppressHydrationWarning>
 
             {/* ── SECTION 1: NAVBAR ── */}
             <motion.header
@@ -368,7 +396,7 @@ export default function HomeDashboard({ onSearch }) {
                 className="sticky top-0 z-50 bg-[#000000]/90 backdrop-blur-xl"
                 style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}
             >
-                <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+                <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
                     {/* Logo */}
                     <div className="flex items-center gap-3">
                         <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center">
@@ -393,6 +421,7 @@ export default function HomeDashboard({ onSearch }) {
                         ].map(({ icon: Icon, label, onClick }) => (
                             <button
                                 key={label}
+                                type="button"
                                 onClick={onClick}
                                 className="flex items-center gap-1.5 text-white/50 hover:text-white transition-colors duration-200"
                             >
@@ -429,7 +458,8 @@ export default function HomeDashboard({ onSearch }) {
                                 </div>
                                 <button
                                     onClick={handleLogout}
-                                    className="p-2 rounded-full hover:bg-white/10 transition-colors text-white/50 hover:text-[#FF5000]"
+                                    aria-label="Logout"
+                                    className="touch-target p-2 rounded-full hover:bg-white/10 transition-colors text-white/50 hover:text-[#FF5000]"
                                     title="Logout"
                                 >
                                     <LogOut className="w-4 h-4" />
@@ -437,8 +467,9 @@ export default function HomeDashboard({ onSearch }) {
                             </div>
                         ) : (
                             <button
+                                type="button"
                                 onClick={handleGoogleLogin}
-                                className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
+                                className="touch-target flex items-center gap-2 min-h-[44px] px-4 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
                             >
                                 <svg className="w-4 h-4" viewBox="0 0 24 24">
                                     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
@@ -455,11 +486,12 @@ export default function HomeDashboard({ onSearch }) {
 
             {/* ── SECTION 2: HERO OR PORTFOLIO ── */}
             {showPortfolio && user ? (
-                <section className="max-w-6xl mx-auto px-6 pt-10 pb-20">
+                <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-8 sm:pt-10 pb-20">
                     <div className="mb-6">
                         <button
+                            type="button"
                             onClick={() => setShowPortfolio(false)}
-                            className="text-white/40 hover:text-white text-sm font-medium flex items-center gap-2 transition-colors"
+                            className="touch-target text-white/40 hover:text-white text-sm font-medium flex items-center gap-2 transition-colors"
                         >
                             ← Back to Dashboard
                         </button>
@@ -468,10 +500,10 @@ export default function HomeDashboard({ onSearch }) {
                 </section>
             ) : (
                 <>
-                    <section className="relative max-w-6xl mx-auto px-6 pt-20 pb-28 text-center overflow-hidden">
+                    <section className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-14 sm:pt-20 pb-20 sm:pb-28 text-center overflow-hidden">
                         {/* Background ambient glow */}
                         <div
-                            className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] rounded-full pointer-events-none"
+                            className="absolute top-0 left-1/2 -translate-x-1/2 w-[420px] sm:w-[600px] h-[260px] sm:h-[300px] rounded-full pointer-events-none"
                             style={{
                                 background: 'radial-gradient(ellipse at center, rgba(0,200,5,0.07) 0%, transparent 70%)',
                                 filter: 'blur(40px)',
@@ -484,22 +516,22 @@ export default function HomeDashboard({ onSearch }) {
                             transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
                         >
                             {/* Badge */}
-                            <div className="inline-flex items-center gap-2 bg-[#111114] rounded-full px-4 py-1.5 mb-8"
+                            <div className="inline-flex items-center gap-2 bg-[#111114] rounded-full px-3.5 sm:px-4 py-1.5 mb-6 sm:mb-8"
                                 style={{ border: '1px solid rgba(0,200,5,0.2)' }}>
                                 <Sparkles className="w-3 h-3 text-[#00C805]" />
-                                <span className="text-xs text-[#00C805] font-semibold tracking-widest uppercase">
+                                <span className="text-[10px] sm:text-xs text-[#00C805] font-semibold tracking-widest uppercase">
                                     Multi-Agent AI Framework · Live
                                 </span>
                             </div>
 
                             {/* Headline */}
-                            <h1 className="text-5xl md:text-7xl font-bold tracking-tighter leading-[1.05] text-white mb-5">
+                            <h1 className="text-3xl sm:text-5xl md:text-7xl font-bold tracking-tighter leading-[1.08] sm:leading-[1.05] text-white mb-4 sm:mb-5">
                                 Wall Street Level AI.
                                 <br />
                                 <span className="text-white/30">In Your Pocket.</span>
                             </h1>
 
-                            <p className="text-white/40 text-lg md:text-xl max-w-xl mx-auto mb-12 leading-relaxed font-light">
+                            <p className="text-white/40 text-base sm:text-lg md:text-xl max-w-xl mx-auto mb-8 sm:mb-12 leading-relaxed font-light">
                                 Search any stock and view market data for <strong>free</strong>.
                                 <br className="hidden md:block" />
                                 Get <strong>1 free AI analysis</strong> upon registration. Our AI is built on hundreds of financial studies for maximum accuracy.
@@ -513,31 +545,32 @@ export default function HomeDashboard({ onSearch }) {
                                         : { boxShadow: '0 0 0 1px rgba(255,255,255,0.08)' }
                                     }
                                     transition={{ duration: 0.25 }}
-                                    className="relative bg-[#111114] rounded-2xl overflow-hidden"
+                                    className="relative bg-[#111114] rounded-2xl overflow-hidden sm:block"
                                     style={{ border: '1px solid rgba(255,255,255,0.1)' }}
                                 >
                                     <Search
-                                        className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 pointer-events-none"
+                                        className="absolute left-4 sm:left-5 top-5 sm:top-1/2 sm:-translate-y-1/2 w-5 h-5 pointer-events-none"
                                         style={{ color: isFocused ? '#00C805' : 'rgba(255,255,255,0.25)' }}
                                     />
                                     <input
                                         ref={inputRef}
                                         type="text"
+                                        aria-label="Search stock ticker"
                                         value={query}
-                                        onChange={(e) => setQuery(e.target.value.toUpperCase())}
+                                        onChange={(e) => setQuery(e.target.value)}
                                         onKeyDown={handleKeyDown}
                                         onFocus={() => setIsFocused(true)}
                                         onBlur={() => setIsFocused(false)}
                                         placeholder={"Search any stock ticker (e.g., NVDA, AAPL)..."}
-                                        className={`w-full bg-transparent pl-14 pr-[160px] py-5 text-base outline-none text-white placeholder:text-white/25`}
+                                        className={`w-full bg-transparent pl-12 sm:pl-14 pr-4 sm:pr-40 pt-4 pb-3 sm:py-5 text-base outline-none text-white placeholder:text-white/25`}
                                         style={{ fontFamily: 'Inter, sans-serif', letterSpacing: '0.01em' }}
                                     />
-                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 z-10">
+                                    <div className="px-3 pb-3 sm:p-0 sm:absolute sm:right-3 sm:top-1/2 sm:-translate-y-1/2 z-10">
                                         <motion.button
                                             type="submit"
                                             whileHover={{ scale: 1.02 }}
                                             whileTap={{ scale: 0.97 }}
-                                            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-black bg-[#00C805] hover:bg-[#00e005] shadow-[0_0_15px_rgba(0,200,5,0.15)] transition-all"
+                                            className="w-full sm:w-auto min-h-[44px] flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-black bg-[#00C805] hover:bg-[#00e005] shadow-[0_0_15px_rgba(0,200,5,0.15)] transition-all"
                                         >
                                             Analyze <ArrowRight className="w-4 h-4" />
                                         </motion.button>
@@ -548,7 +581,7 @@ export default function HomeDashboard({ onSearch }) {
                                 <motion.div
                                     initial={{ opacity: 0 }}
                                     animate={{ opacity: 1 }}
-                                    className="mt-4 flex items-center justify-center gap-2 text-sm text-white/50"
+                                    className="mt-4 flex items-center justify-center gap-2 text-xs sm:text-sm text-white/50"
                                 >
                                     <span><strong className="text-white/80">100% Free</strong> Search & Live Data. <strong className="text-[#00C805]">1 Free AI Analysis</strong> on sign up.</span>
                                 </motion.div>
@@ -565,13 +598,14 @@ export default function HomeDashboard({ onSearch }) {
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{ delay: 0.4, duration: 0.5 }}
-                            className="flex items-center justify-center flex-wrap gap-2 mt-8"
+                            className="flex items-center justify-center flex-wrap gap-2 mt-6 sm:mt-8"
                         >
                             {['NVDA', 'AAPL', 'TSLA', 'META', 'MSFT', 'AMZN', 'GOOGL'].map((t) => (
                                 <button
                                     key={t}
+                                    type="button"
                                     onClick={() => onSearch(t)}
-                                    className="px-3.5 py-1.5 rounded-full text-xs font-semibold text-white/50 hover:text-white/90 transition-all duration-200"
+                                    className="touch-target px-3.5 py-1.5 rounded-full text-xs font-semibold text-white/50 hover:text-white/90 transition-all duration-200"
                                     style={{ border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}
                                 >
                                     {t}
@@ -581,33 +615,38 @@ export default function HomeDashboard({ onSearch }) {
                     </section>
 
                     {/* ── SECTION 3: TRENDING AI INSIGHTS ── */}
-                    <section className="max-w-6xl mx-auto px-6 pb-24">
+                    <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-16 sm:pb-24">
                         <motion.div
                             initial={{ opacity: 0, y: 16 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.5, delay: 0.2 }}
                         >
-                            <div className="flex items-center justify-between mb-7">
+                            <div className="flex items-center justify-between mb-7 gap-3">
                                 <div className="flex items-center gap-2.5">
                                     <div className="w-1.5 h-1.5 rounded-full bg-[#00C805] animate-pulse" />
-                                    <span className="text-xs font-bold uppercase tracking-[0.15em] text-white/40">
+                                    <span className="text-xs font-bold uppercase tracking-[0.15em] text-white/50">
                                         Trending AI Insights
                                     </span>
                                 </div>
                                 {userProfile?.isPro && (
                                     <button
+                                        type="button"
                                         onClick={() => {
                                             setEditPicksInput((userProfile?.customPicks || ["NVDA", "AAPL", "META", "TSLA", "MSFT"]).join(', '));
                                             setIsEditingPicks(true);
                                         }}
-                                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-all text-[11px] font-bold uppercase tracking-wider"
+                                        className="touch-target flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white transition-all text-[11px] font-bold uppercase tracking-wider"
                                     >
                                         <Activity className="w-3.5 h-3.5" />
                                         <span>Personalize</span>
                                     </button>
                                 )}
                                 {!userProfile?.isPro && (
-                                    <button className="text-xs text-white/30 hover:text-white/70 transition-colors flex items-center gap-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => document.getElementById('recent-scans')?.scrollIntoView({ behavior: 'smooth' })}
+                                        className="touch-target text-xs text-white/30 hover:text-white/70 transition-colors flex items-center gap-1"
+                                    >
                                         View all <ChevronRight className="w-3 h-3" />
                                     </button>
                                 )}
@@ -631,7 +670,7 @@ export default function HomeDashboard({ onSearch }) {
                                             className="relative w-full max-w-md bg-[#111114] border border-white/10 rounded-2xl p-6 shadow-2xl"
                                         >
                                             <h3 className="text-lg font-bold text-white mb-1">Customize Your Dashboard</h3>
-                                            <p className="text-sm text-white/40 mb-5">Select up to 5 favorite tickers to track on your home screen.</p>
+                                            <p className="text-sm text-white/60 mb-5">Select up to 5 favorite tickers to track on your home screen.</p>
 
                                             <div className="space-y-4">
                                                 <div className="flex flex-wrap gap-2 mb-4">
@@ -639,14 +678,16 @@ export default function HomeDashboard({ onSearch }) {
                                                         <div key={`${ticker}-${idx}`} className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full text-xs font-bold text-white group">
                                                             {ticker}
                                                             <button
+                                                                type="button"
+                                                                aria-label={`Remove ${ticker}`}
                                                                 onClick={() => {
                                                                     const current = editPicksInput.split(',').map(s => s.trim()).filter(s => s.length > 0);
                                                                     const next = current.filter((_, i) => i !== idx);
                                                                     setEditPicksInput(next.join(', '));
                                                                 }}
-                                                                className="text-white/20 hover:text-red-400"
+                                                                className="touch-target text-white/20 hover:text-red-400 flex items-center justify-center"
                                                             >
-                                                                ×
+                                                                <X className="w-3.5 h-3.5" />
                                                             </button>
                                                         </div>
                                                     ))}
@@ -659,21 +700,23 @@ export default function HomeDashboard({ onSearch }) {
                                                         value={editPicksInput}
                                                         onChange={(e) => setEditPicksInput(e.target.value.toUpperCase())}
                                                         placeholder="Enter tickers (e.g. AAPL, BTC-USD)"
-                                                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#00C805]/50 transition-colors"
+                                                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-base sm:text-sm text-white focus:outline-none focus:border-[#00C805]/50 transition-colors"
                                                     />
                                                 </div>
 
                                                 <div className="flex gap-3 pt-2">
                                                     <button
+                                                        type="button"
                                                         onClick={handleSavePicks}
                                                         disabled={isSavingPicks}
-                                                        className="flex-1 bg-[#00C805] text-black font-bold py-3 rounded-xl hover:bg-[#00e005] transition-all disabled:opacity-50"
+                                                        className="touch-target flex-1 min-h-[44px] bg-[#00C805] text-black font-bold py-3 rounded-xl hover:bg-[#00e005] transition-all disabled:opacity-50"
                                                     >
                                                         {isSavingPicks ? 'SAVING...' : 'SAVE CHANGES'}
                                                     </button>
                                                     <button
+                                                        type="button"
                                                         onClick={() => setIsEditingPicks(false)}
-                                                        className="px-6 py-3 rounded-xl bg-white/5 text-white/60 font-medium hover:bg-white/10 transition-all"
+                                                        className="touch-target min-h-[44px] px-6 py-3 rounded-xl bg-white/5 text-white/60 font-medium hover:bg-white/10 transition-all"
                                                     >
                                                         CANCEL
                                                     </button>
@@ -685,7 +728,7 @@ export default function HomeDashboard({ onSearch }) {
                             </AnimatePresence>
 
                             {/* Cards — horizontal scroll on mobile, grid on desktop */}
-                            <div className="flex md:grid md:grid-cols-4 gap-4 overflow-x-auto pb-4 md:pb-0 scrollbar-none -mx-6 px-6 md:mx-0 md:px-0">
+                            <div className="flex md:grid md:grid-cols-4 gap-4 overflow-x-auto pb-4 md:pb-0 scrollbar-none -mx-4 sm:-mx-6 px-4 sm:px-6 md:mx-0 md:px-0">
                                 {livePicks === null
                                     ? TOP_PICKS_TICKERS.map((_, i) => <SkeletonCard key={i} i={i} />)
                                     : displayPicks.map((stock, i) => (
@@ -696,8 +739,97 @@ export default function HomeDashboard({ onSearch }) {
                         </motion.div>
                     </section>
 
+                    {/* ── SECTION 3b: WATCHLIST ── */}
+                    {watchlist.length > 0 && (
+                        <section className="max-w-6xl mx-auto px-4 sm:px-6">
+                            <motion.div
+                                initial={{ opacity: 0, y: 16 }}
+                                whileInView={{ opacity: 1, y: 0 }}
+                                viewport={{ once: true, margin: '-60px' }}
+                                transition={{ duration: 0.5 }}
+                            >
+                                <div className="flex items-center gap-2.5 mb-5">
+                                    <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-[#FFD700]" stroke="#FFD700" strokeWidth={1.5}>
+                                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                                    </svg>
+                                    <span className="text-xs font-bold uppercase tracking-[0.15em] text-white/50">Watchlist</span>
+                                    <span className="text-[10px] text-white/40 font-bold bg-white/5 px-2 py-0.5 rounded-full">{watchlist.length}</span>
+                                </div>
+
+                                <div className="rounded-2xl overflow-hidden border border-white/5 bg-[#111114]">
+                                    {watchlist.map((item, i) => {
+                                        const data = watchlistPrices[item.ticker];
+                                        const isUp = (data?.change ?? 0) >= 0;
+                                        const changeColor = isUp ? '#00C805' : '#FF5000';
+                                        return (
+                                            <div
+                                                key={item.ticker}
+                                                className="flex flex-wrap sm:flex-nowrap items-center gap-y-2 px-4 sm:px-5 py-3.5 hover:bg-white/5 transition-colors border-b border-white/5 last:border-0 cursor-pointer"
+                                                onClick={() => onSearch(item.ticker)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' || e.key === ' ') {
+                                                        e.preventDefault();
+                                                        onSearch(item.ticker);
+                                                    }
+                                                }}
+                                                role="button"
+                                                tabIndex={0}
+                                            >
+                                                {/* Logo */}
+                                                <div className="w-8 h-8 rounded-full bg-white/10 border border-white/10 flex items-center justify-center overflow-hidden mr-3 shrink-0">
+                                                    <img
+                                                        src={`https://img.logokit.com/ticker/${item.ticker}?token=pk_frfa213068bb8ffac35321&size=64`}
+                                                        alt={item.ticker}
+                                                        className="w-full h-full object-contain p-1"
+                                                        onError={(e) => { e.target.style.display = 'none'; }}
+                                                    />
+                                                </div>
+                                                {/* Ticker & Name */}
+                                                <div className="flex-1 min-w-0">
+                                                    <span className="font-bold text-sm text-white/90">{item.ticker}</span>
+                                                    {item.name && item.name !== item.ticker && (
+                                                        <span className="text-xs text-white/50 ml-2 truncate hidden sm:inline">{item.name}</span>
+                                                    )}
+                                                </div>
+                                                {/* Price & Change */}
+                                                <div className="text-right ml-auto mr-2 sm:mr-4">
+                                                    {data?.price != null ? (
+                                                        <>
+                                                            <div className="font-semibold text-sm text-white/90">${data.price.toFixed(2)}</div>
+                                                            <div className="text-xs font-semibold" style={{ color: changeColor }}>
+                                                                {isUp ? '+' : ''}{(data.change ?? 0).toFixed(2)}%
+                                                            </div>
+                                                        </>
+                                                    ) : (
+                                                        <div className="text-xs text-white/50 animate-pulse">Loading…</div>
+                                                    )}
+                                                </div>
+                                                {/* Remove Button */}
+                                                <button
+                                                    type="button"
+                                                    aria-label={`Remove ${item.ticker} from watchlist`}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        const WATCHLIST_KEY = 'consensusai_watchlist';
+                                                        const next = watchlist.filter(w => w.ticker !== item.ticker);
+                                                        localStorage.setItem(WATCHLIST_KEY, JSON.stringify(next));
+                                                        setWatchlist(next);
+                                                    }}
+                                                    className="touch-target p-1.5 rounded-full text-white/15 hover:text-[#FF5000] hover:bg-red-500/10 transition-all"
+                                                    title="Remove from watchlist"
+                                                >
+                                                    <X className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </motion.div>
+                        </section>
+                    )}
+
                     {/* ── SECTION 4: RECENT AI SCANS ── */}
-                    <section className="max-w-6xl mx-auto px-6 pb-24">
+                    <section id="recent-scans" className="max-w-6xl mx-auto px-4 sm:px-6 pb-16 sm:pb-24">
                         <motion.div
                             initial={{ opacity: 0, y: 16 }}
                             whileInView={{ opacity: 1, y: 0 }}
@@ -726,10 +858,18 @@ export default function HomeDashboard({ onSearch }) {
                                             viewport={{ once: true }}
                                             transition={{ delay: i * 0.06, duration: 0.35 }}
                                             onClick={() => onSearch(scan.ticker)}
-                                            className="flex items-center justify-between px-6 py-4 cursor-pointer transition-colors hover:bg-white/[0.03] group"
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' || e.key === ' ') {
+                                                    e.preventDefault();
+                                                    onSearch(scan.ticker);
+                                                }
+                                            }}
+                                            role="button"
+                                            tabIndex={0}
+                                            className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 sm:px-6 py-4 cursor-pointer transition-colors hover:bg-white/[0.03] group"
                                             style={i !== displayScans.length - 1 ? { borderBottom: '1px solid rgba(255,255,255,0.04)' } : {}}
                                         >
-                                            {/* Left: ticker + timestamp */}
+                                            {/* Left: ticker + info */}
                                             <div className="flex items-center gap-4">
                                                 <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 overflow-hidden bg-white/5"
                                                     style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
@@ -743,15 +883,20 @@ export default function HomeDashboard({ onSearch }) {
                                                 <div>
                                                     <div className="text-sm font-bold text-white">{scan.ticker}</div>
                                                     <div className="flex items-center gap-1.5 mt-0.5">
-                                                        <Clock className="w-2.5 h-2.5 text-white/25" />
-                                                        <span className="text-[11px] text-white/30">Analyzed {scan.ago}</span>
+                                                        <span
+                                                            className="text-[11px] font-medium"
+                                                            style={{ color: (scan.change ?? 0) >= 0 ? '#00C805' : '#FF5000' }}
+                                                        >
+                                                            {scan.change != null ? `${(scan.change >= 0 ? '+' : '')}${scan.change.toFixed(2)}%` : '—'}
+                                                        </span>
+                                                        <span className="text-white/20 text-[11px]">today</span>
                                                     </div>
                                                 </div>
                                             </div>
 
                                             {/* Right: price, score, signal */}
-                                            <div className="flex items-center gap-6">
-                                                <div className="hidden sm:block text-sm font-medium text-white/70">
+                                            <div className="flex items-center gap-4 sm:gap-6 w-full sm:w-auto justify-between sm:justify-end">
+                                                <div className="text-sm font-medium text-white/70">
                                                     {scan.price != null ? `$${scan.price.toFixed(2)}` : <span className="w-16 h-3 bg-white/10 rounded animate-pulse inline-block" />}
                                                 </div>
                                                 <div className="flex items-center gap-1.5">
@@ -764,7 +909,7 @@ export default function HomeDashboard({ onSearch }) {
                                                 >
                                                     {scan.signal}
                                                 </div>
-                                                <ChevronRight className="w-4 h-4 text-white/15 group-hover:text-white/40 transition-colors" />
+                                                <ChevronRight className="w-4 h-4 text-white/15 group-hover:text-white/40 transition-colors shrink-0" />
                                             </div>
                                         </motion.div>
                                     );
@@ -774,7 +919,7 @@ export default function HomeDashboard({ onSearch }) {
                     </section>
 
                     {/* ── SECTION 5: HOW OUR AI WORKS ── */}
-                    <section className="max-w-6xl mx-auto px-6 pb-32">
+                    <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-24 sm:pb-32">
                         <motion.div
                             initial={{ opacity: 0, y: 16 }}
                             whileInView={{ opacity: 1, y: 0 }}
@@ -785,7 +930,7 @@ export default function HomeDashboard({ onSearch }) {
                                 <span className="text-xs font-bold uppercase tracking-[0.15em] text-white/30">
                                     How Our AI Works
                                 </span>
-                                <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-white mt-3">
+                                <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-white mt-3">
                                     The Multi-Agent Debate Framework
                                 </h2>
                                 <p className="text-white/40 mt-3 text-base max-w-lg mx-auto">
@@ -796,7 +941,6 @@ export default function HomeDashboard({ onSearch }) {
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 {[
                                     {
-                                        icon: '🐂',
                                         color: '#00C805',
                                         label: 'The Bull',
                                         sublabel: 'Fundamental Analysis',
@@ -804,7 +948,6 @@ export default function HomeDashboard({ onSearch }) {
                                         lucideIcon: TrendingUp,
                                     },
                                     {
-                                        icon: '🐻',
                                         color: '#FF5000',
                                         label: 'The Bear',
                                         sublabel: 'Macro Risk Stress-Test',
@@ -812,14 +955,13 @@ export default function HomeDashboard({ onSearch }) {
                                         lucideIcon: TrendingDown,
                                     },
                                     {
-                                        icon: '⚖️',
                                         color: '#FFB800',
                                         label: 'The Judge',
                                         sublabel: 'Final Synthesis & Score',
                                         desc: 'The Chief Investment Officer absorbs both arguments, applies quantitative weighting, and delivers a 0–100 AI score with a clear signal.',
                                         lucideIcon: Scale,
                                     },
-                                ].map(({ icon, color, label, sublabel, desc, lucideIcon: Icon }, i) => (
+                                ].map(({ color, label, sublabel, desc, lucideIcon: Icon }, i) => (
                                     <motion.div
                                         key={label}
                                         initial={{ opacity: 0, y: 20 }}
@@ -827,16 +969,16 @@ export default function HomeDashboard({ onSearch }) {
                                         viewport={{ once: true }}
                                         transition={{ delay: i * 0.12, duration: 0.45 }}
                                         whileHover={{ y: -4, transition: { duration: 0.2 } }}
-                                        className="bg-[#0A0A0C] rounded-2xl p-7 flex flex-col gap-5 group"
+                                        className="bg-[#0A0A0C] rounded-2xl p-5 sm:p-7 flex flex-col gap-5 group"
                                         style={{ border: '1px solid rgba(255,255,255,0.05)' }}
                                     >
                                         {/* Icon ring */}
                                         <div className="flex items-center gap-3">
                                             <div
-                                                className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl"
+                                                className="w-12 h-12 rounded-2xl flex items-center justify-center"
                                                 style={{ backgroundColor: `${color}12`, border: `1px solid ${color}25` }}
                                             >
-                                                {icon}
+                                                <Icon className="w-5 h-5" style={{ color }} />
                                             </div>
                                             <div>
                                                 <div className="font-bold text-white text-sm">{label}</div>
@@ -867,16 +1009,13 @@ export default function HomeDashboard({ onSearch }) {
                                 className="mt-12 flex flex-col sm:flex-row items-center justify-center gap-4"
                             >
                                 <button
+                                    type="button"
                                     onClick={() => inputRef?.current?.focus()}
-                                    className="flex items-center gap-2 px-8 py-3.5 rounded-xl font-bold text-sm text-black transition-all hover:brightness-110 active:scale-95"
+                                    className="touch-target flex items-center gap-2 px-8 py-3.5 rounded-xl font-bold text-sm text-black transition-all hover:brightness-110 active:scale-95"
                                     style={{ backgroundColor: '#00C805' }}
                                 >
                                     <Zap className="w-4 h-4" />
                                     Run Your First Analysis
-                                </button>
-                                <button className="flex items-center gap-2 px-8 py-3.5 rounded-xl font-bold text-sm text-white/60 hover:text-white transition-colors">
-                                    View sample report
-                                    <ArrowRight className="w-3.5 h-3.5" />
                                 </button>
                             </motion.div>
                         </motion.div>
@@ -884,12 +1023,12 @@ export default function HomeDashboard({ onSearch }) {
 
                     {/* ── FOOTER ── */}
                     <footer
-                        className="max-w-6xl mx-auto px-6 py-10"
+                        className="max-w-6xl mx-auto px-4 sm:px-6 py-10"
                         style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}
                     >
                         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-2">
-                                <img src="/logo.svg" className="w-3.5 h-3.5" />
+                                <img src="/logo.svg" alt="ConsensusAI" className="w-3.5 h-3.5" />
                                 <span className="text-xs text-white/20 font-semibold">ConsensusAI</span>
                             </div>
                             <p className="text-xs text-white/20">© 2026 ConsensusAI Technologies. For informational purposes only. Not financial advice.</p>
@@ -898,6 +1037,55 @@ export default function HomeDashboard({ onSearch }) {
                     </footer>
                 </>
             )}
+
+            {/* ── MOBILE BOTTOM NAVIGATION ── */}
+            <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#000000]/95 backdrop-blur-xl border-t border-white/5 flex items-center justify-around px-2 pb-safe">
+                <button
+                    type="button"
+                    onClick={() => {
+                        setShowPortfolio(false);
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    aria-label="Go to home dashboard"
+                    className="touch-target flex flex-col items-center justify-center gap-1 py-2.5 px-4 text-white/70"
+                >
+                    <LayoutDashboard className="w-5 h-5" />
+                    <span className="text-[10px] font-medium">Home</span>
+                </button>
+                <button
+                    type="button"
+                    onClick={() => {
+                        if (!user) handleGoogleLogin();
+                        else setShowPortfolio(true);
+                    }}
+                    aria-label="Open portfolio"
+                    className="touch-target flex flex-col items-center justify-center gap-1 py-2.5 px-4 text-white/40 hover:text-white transition-colors"
+                >
+                    <Briefcase className="w-5 h-5" />
+                    <span className="text-[10px] font-medium">Portfolio</span>
+                </button>
+                {user ? (
+                    <button
+                        type="button"
+                        onClick={handleLogout}
+                        aria-label="Sign out"
+                        className="touch-target flex flex-col items-center justify-center gap-1 py-2.5 px-4 text-white/40 hover:text-[#FF5000] transition-colors"
+                    >
+                        <LogOut className="w-5 h-5" />
+                        <span className="text-[10px] font-medium">Sign Out</span>
+                    </button>
+                ) : (
+                    <button
+                        type="button"
+                        onClick={handleGoogleLogin}
+                        aria-label="Sign in"
+                        className="touch-target flex flex-col items-center justify-center gap-1 py-2.5 px-4 text-[#00C805]"
+                    >
+                        <User className="w-5 h-5" />
+                        <span className="text-[10px] font-medium">Sign In</span>
+                    </button>
+                )}
+            </nav>
         </div>
     );
 }

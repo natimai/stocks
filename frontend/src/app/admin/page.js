@@ -84,8 +84,9 @@ export default function AdminPage() {
                 <h1 className="text-2xl font-bold text-white">Admin Access</h1>
                 <p className="text-white/40 text-sm">Sign in with your admin Google account</p>
                 <button
+                    type="button"
                     onClick={() => signInWithPopup(auth, googleProvider)}
-                    className="flex items-center gap-2 px-6 py-3 bg-[#00C805] hover:bg-[#00e005] text-black font-bold rounded-xl transition-all"
+                    className="touch-target min-h-[44px] flex items-center gap-2 px-6 py-3 bg-[#00C805] hover:bg-[#00e005] text-black font-bold rounded-xl transition-all"
                 >
                     Sign in with Google
                 </button>
@@ -100,8 +101,9 @@ export default function AdminPage() {
                 <h1 className="text-xl font-bold text-white">Access Denied</h1>
                 <p className="text-white/40 text-sm">{user.email} does not have admin privileges.</p>
                 <button
+                    type="button"
                     onClick={() => auth.signOut()}
-                    className="text-sm text-white/40 hover:text-white underline"
+                    className="touch-target text-sm text-white/40 hover:text-white underline"
                 >
                     Sign out
                 </button>
@@ -112,40 +114,44 @@ export default function AdminPage() {
     return (
         <div className="min-h-screen bg-black text-white" style={{ fontFamily: 'Inter, sans-serif' }}>
             {/* Header */}
-            <header className="border-b border-white/5 px-6 py-4 flex items-center justify-between sticky top-0 bg-black/90 backdrop-blur-xl z-50">
-                <div className="flex items-center gap-3">
-                    <a href="/" className="text-white/40 hover:text-white transition-colors">
-                        <ArrowLeft className="w-5 h-5" />
-                    </a>
-                    <img src="/logo.svg" alt="ConsensusAI Logo" className="w-5 h-5" />
-                    <span className="font-bold tracking-tight">ConsensusAI Admin</span>
-                    <span className="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Staff Only</span>
-                </div>
-                <div className="flex items-center gap-4">
-                    <button
-                        onClick={fetchUsers}
-                        disabled={loading}
-                        className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white transition-colors disabled:opacity-50"
-                    >
-                        <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-                        Refresh
-                    </button>
-                    <button
-                        onClick={() => auth.signOut()}
-                        className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white transition-colors"
-                    >
-                        <LogOut className="w-3.5 h-3.5" />
-                        Sign out
-                    </button>
+            <header className="border-b border-white/5 px-4 sm:px-6 py-3 sm:py-4 sticky top-0 bg-black/90 backdrop-blur-xl z-50">
+                <div className="max-w-5xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                        <a href="/" className="touch-target text-white/40 hover:text-white transition-colors flex items-center justify-center rounded-full">
+                            <ArrowLeft className="w-5 h-5" />
+                        </a>
+                        <img src="/logo.svg" alt="ConsensusAI Logo" className="w-5 h-5 shrink-0" />
+                        <span className="font-bold tracking-tight truncate">ConsensusAI Admin</span>
+                        <span className="text-[10px] sm:text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shrink-0">Staff Only</span>
+                    </div>
+                    <div className="flex items-center justify-end gap-3">
+                        <button
+                            type="button"
+                            onClick={fetchUsers}
+                            disabled={loading}
+                            className="touch-target flex items-center gap-1.5 text-xs text-white/40 hover:text-white transition-colors disabled:opacity-50"
+                        >
+                            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                            Refresh
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => auth.signOut()}
+                            className="touch-target flex items-center gap-1.5 text-xs text-white/40 hover:text-white transition-colors"
+                        >
+                            <LogOut className="w-3.5 h-3.5" />
+                            Sign out
+                        </button>
+                    </div>
                 </div>
             </header>
 
-            <main className="max-w-5xl mx-auto px-6 py-10">
+            <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
                 <h1 className="text-3xl font-bold tracking-tight mb-2">User Management</h1>
                 <p className="text-white/40 text-sm mb-8">Manage all registered users, toggle Pro access, and monitor usage.</p>
 
                 {/* Stats Row */}
-                <div className="grid grid-cols-3 gap-4 mb-10">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
                     {[
                         { label: 'Total Users', value: users.length, icon: <Users className="w-4 h-4" />, color: 'text-white' },
                         { label: 'Pro Users', value: proCount, icon: <Crown className="w-4 h-4" />, color: 'text-yellow-400' },
@@ -169,78 +175,114 @@ export default function AdminPage() {
 
                 {/* Users Table */}
                 <div className="bg-[#111114] border border-white/5 rounded-2xl overflow-hidden">
-                    <div className="grid grid-cols-[1fr_auto_auto_auto] gap-4 px-6 py-3 border-b border-white/5 text-xs font-bold uppercase tracking-widest text-white/30">
-                        <span>User</span>
-                        <span className="text-center">Analyses</span>
-                        <span className="text-center">Joined</span>
-                        <span className="text-center">Status</span>
-                    </div>
-
-                    <AnimatePresence>
-                        {loading ? (
-                            <div className="flex items-center justify-center py-16">
-                                <div className="w-6 h-6 border-2 border-white/10 border-t-[#00C805] rounded-full animate-spin" />
+                    {loading ? (
+                        <div className="flex items-center justify-center py-16">
+                            <div className="w-6 h-6 border-2 border-white/10 border-t-[#00C805] rounded-full animate-spin" />
+                        </div>
+                    ) : users.length === 0 ? (
+                        <div className="text-center py-16 text-white/30 text-sm">No users registered yet.</div>
+                    ) : (
+                        <>
+                            <div className="hidden md:grid grid-cols-[1fr_auto_auto_auto] gap-4 px-6 py-3 border-b border-white/5 text-xs font-bold uppercase tracking-widest text-white/30">
+                                <span>User</span>
+                                <span className="text-center">Analyses</span>
+                                <span className="text-center">Joined</span>
+                                <span className="text-center">Status</span>
                             </div>
-                        ) : users.length === 0 ? (
-                            <div className="text-center py-16 text-white/30 text-sm">No users registered yet.</div>
-                        ) : (
-                            users.map((u, i) => (
-                                <motion.div
-                                    key={u.uid}
-                                    initial={{ opacity: 0, y: 8 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: i * 0.03 }}
-                                    className="grid grid-cols-[1fr_auto_auto_auto] gap-4 items-center px-6 py-4 border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-colors"
-                                >
-                                    {/* User info */}
-                                    <div className="flex items-center gap-3 min-w-0">
-                                        <div className="w-9 h-9 rounded-full bg-[#1E1E24] flex items-center justify-center text-sm font-bold text-white/60 flex-shrink-0">
-                                            {(u.name || u.email || '?')[0].toUpperCase()}
-                                        </div>
-                                        <div className="min-w-0">
-                                            <p className="font-medium text-sm text-white truncate">{u.name || 'Unknown'}</p>
-                                            <p className="text-xs text-white/40 truncate">{u.email || u.uid}</p>
-                                        </div>
-                                    </div>
 
-                                    {/* Analysis count */}
-                                    <div className="text-center">
-                                        <span className="text-sm font-bold text-white/70">{u.analysisCount ?? 0}</span>
-                                        <p className="text-[10px] text-white/30">scans</p>
-                                    </div>
-
-                                    {/* Join date */}
-                                    <div className="text-center">
-                                        <span className="text-xs text-white/40 flex items-center gap-1">
-                                            <Clock className="w-3 h-3" />
-                                            {u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : '—'}
-                                        </span>
-                                    </div>
-
-                                    {/* Pro toggle */}
-                                    <div className="flex justify-center">
-                                        <button
-                                            onClick={() => togglePro(u.uid, u.isPro)}
-                                            disabled={updating === u.uid}
-                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${u.isPro
-                                                ? 'bg-yellow-400/20 text-yellow-400 hover:bg-red-500/20 hover:text-red-400'
-                                                : 'bg-white/5 text-white/40 hover:bg-yellow-400/20 hover:text-yellow-400'
-                                                } ${updating === u.uid ? 'opacity-50 cursor-wait' : ''}`}
+                            <AnimatePresence>
+                                <div className="hidden md:block">
+                                    {users.map((u, i) => (
+                                        <motion.div
+                                            key={`desktop-${u.uid}`}
+                                            initial={{ opacity: 0, y: 8 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            transition={{ delay: i * 0.03 }}
+                                            className="grid grid-cols-[1fr_auto_auto_auto] gap-4 items-center px-6 py-4 border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-colors"
                                         >
-                                            {updating === u.uid ? (
-                                                <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                                            ) : u.isPro ? (
-                                                <Crown className="w-3 h-3" />
-                                            ) : (
-                                                <Zap className="w-3 h-3" />
-                                            )}
-                                            {u.isPro ? 'Pro' : 'Free'}
-                                        </button>
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <div className="w-9 h-9 rounded-full bg-[#1E1E24] flex items-center justify-center text-sm font-bold text-white/60 flex-shrink-0">
+                                                    {(u.name || u.email || '?')[0].toUpperCase()}
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="font-medium text-sm text-white truncate">{u.name || 'Unknown'}</p>
+                                                    <p className="text-xs text-white/40 truncate">{u.email || u.uid}</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="text-center">
+                                                <span className="text-sm font-bold text-white/70">{u.analysisCount ?? 0}</span>
+                                                <p className="text-[10px] text-white/30">scans</p>
+                                            </div>
+
+                                            <div className="text-center">
+                                                <span className="text-xs text-white/40 flex items-center gap-1">
+                                                    <Clock className="w-3 h-3" />
+                                                    {u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : '—'}
+                                                </span>
+                                            </div>
+
+                                            <div className="flex justify-center">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => togglePro(u.uid, u.isPro)}
+                                                    disabled={updating === u.uid}
+                                                    className={`touch-target flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${u.isPro
+                                                        ? 'bg-yellow-400/20 text-yellow-400 hover:bg-red-500/20 hover:text-red-400'
+                                                        : 'bg-white/5 text-white/40 hover:bg-yellow-400/20 hover:text-yellow-400'
+                                                        } ${updating === u.uid ? 'opacity-50 cursor-wait' : ''}`}
+                                                >
+                                                    {updating === u.uid ? (
+                                                        <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                                                    ) : u.isPro ? (
+                                                        <Crown className="w-3 h-3" />
+                                                    ) : (
+                                                        <Zap className="w-3 h-3" />
+                                                    )}
+                                                    {u.isPro ? 'Pro' : 'Free'}
+                                                </button>
+                                            </div>
+                                        </motion.div>
+                                    ))}
+                                </div>
+                            </AnimatePresence>
+
+                            <div className="md:hidden divide-y divide-white/5">
+                                {users.map((u) => (
+                                    <div key={`mobile-${u.uid}`} className="p-4">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0">
+                                                <p className="font-medium text-sm text-white truncate">{u.name || 'Unknown'}</p>
+                                                <p className="text-xs text-white/40 truncate mt-0.5">{u.email || u.uid}</p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => togglePro(u.uid, u.isPro)}
+                                                disabled={updating === u.uid}
+                                                className={`touch-target flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${u.isPro
+                                                    ? 'bg-yellow-400/20 text-yellow-400'
+                                                    : 'bg-white/5 text-white/40'
+                                                    } ${updating === u.uid ? 'opacity-50 cursor-wait' : ''}`}
+                                            >
+                                                {updating === u.uid ? (
+                                                    <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                                                ) : u.isPro ? (
+                                                    <Crown className="w-3 h-3" />
+                                                ) : (
+                                                    <Zap className="w-3 h-3" />
+                                                )}
+                                                {u.isPro ? 'Pro' : 'Free'}
+                                            </button>
+                                        </div>
+                                        <div className="mt-3 flex items-center justify-between text-xs text-white/50">
+                                            <span>{u.analysisCount ?? 0} scans</span>
+                                            <span>{u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : '—'}</span>
+                                        </div>
                                     </div>
-                                </motion.div>
-                            ))
-                        )}
-                    </AnimatePresence>
+                                ))}
+                            </div>
+                        </>
+                    )}
                 </div>
 
                 <p className="text-xs text-white/20 text-center mt-6">
