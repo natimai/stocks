@@ -14,44 +14,52 @@ export default function InteractiveChart({ data, type = 'candlestick', showSMA =
         }
 
         // Format data for lightweight-charts
-        const chartData = data.map(d => {
-            // If data comes from the initial payload (has .date as "MM/DD")
-            if (d.date) {
-                const year = new Date().getFullYear();
-                const [month, day] = d.date.split('/');
-                const paddedMonth = month.padStart(2, '0');
-                const paddedDay = day.padStart(2, '0');
-                return {
-                    time: `${year}-${paddedMonth}-${paddedDay}`,
-                    open: d.open,
-                    high: d.high,
-                    low: d.low,
-                    close: d.close,
-                    value: d.close
-                };
-            }
-            // In case Python returned a UNIX timestamp (for intraday like 1D/1W)
-            if (typeof d.time === 'number') {
-                return {
-                    time: d.time, // Unix Timestamp
-                    open: d.open,
-                    high: d.high,
-                    low: d.low,
-                    close: d.close,
-                    value: d.close || d.value
-                };
+        const nowUnix = Math.floor(Date.now() / 1000);
+        const chartData = data.map((d, index) => {
+            const open = Number(d.open ?? d.value ?? d.close ?? 0);
+            const close = Number(d.close ?? d.value ?? d.open ?? open);
+            const high = Number(d.high ?? Math.max(open, close));
+            const low = Number(d.low ?? Math.min(open, close));
+            const volume = Number(d.volume ?? 0);
+
+            // Prefer explicit unix timestamps when available.
+            if (typeof d._ts === 'number' && Number.isFinite(d._ts)) {
+                return { time: Math.floor(d._ts), open, high, low, close, value: close, volume };
             }
 
-            // Otherwise it's a date string like 'YYYY-MM-DD' from Daily ranges
-            return {
-                time: d.time,
-                open: d.open,
-                high: d.high,
-                low: d.low,
-                close: d.close,
-                value: d.close || d.value,
-                volume: d.volume || 0
-            };
+            // In case Python returned a UNIX timestamp directly.
+            if (typeof d.time === 'number' && Number.isFinite(d.time)) {
+                return { time: Math.floor(d.time), open, high, low, close, value: close, volume };
+            }
+
+            // Lightweight-charts accepts 'YYYY-MM-DD' string times.
+            if (typeof d.time === 'string' && d.time.trim()) {
+                return { time: d.time.trim(), open, high, low, close, value: close, volume };
+            }
+
+            // Legacy payload can include MM/DD in "date".
+            if (typeof d.date === 'string') {
+                const dateText = d.date.trim();
+                if (dateText.includes('/')) {
+                    const [monthRaw, dayRaw] = dateText.split('/');
+                    if (monthRaw && dayRaw) {
+                        const year = new Date().getFullYear();
+                        const paddedMonth = monthRaw.padStart(2, '0');
+                        const paddedDay = dayRaw.padStart(2, '0');
+                        return { time: `${year}-${paddedMonth}-${paddedDay}`, open, high, low, close, value: close, volume };
+                    }
+                }
+
+                // If date-like text is parseable, fallback to unix timestamp.
+                const parsed = Date.parse(dateText);
+                if (!Number.isNaN(parsed)) {
+                    return { time: Math.floor(parsed / 1000), open, high, low, close, value: close, volume };
+                }
+            }
+
+            // Final fallback for unexpected shapes (e.g. "10:30 AM" labels): keep order stable.
+            const fallbackTime = nowUnix - (data.length - index) * 300;
+            return { time: fallbackTime, open, high, low, close, value: close, volume };
         });
 
         // Format volume data specifically
@@ -201,7 +209,16 @@ export default function InteractiveChart({ data, type = 'candlestick', showSMA =
                 if (setHoverPrice) setHoverPrice(null);
                 if (setHoverDate) setHoverDate(null);
             } else {
-                const dateStr = typeof param.time === 'string' ? param.time : new Date(param.time * 1000).toLocaleString();
+                let dateStr = '';
+                if (typeof param.time === 'string') {
+                    dateStr = param.time;
+                } else if (typeof param.time === 'number') {
+                    dateStr = new Date(param.time * 1000).toLocaleString();
+                } else if (param.time && typeof param.time === 'object' && 'year' in param.time) {
+                    const month = String(param.time.month ?? '').padStart(2, '0');
+                    const day = String(param.time.day ?? '').padStart(2, '0');
+                    dateStr = `${param.time.year}-${month}-${day}`;
+                }
                 const dataObj = param.seriesData.get(series);
 
                 if (dataObj) {
