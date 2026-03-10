@@ -575,6 +575,7 @@ def get_quick_stats(ticker: str):
         # Attempt to read REAL AI Score from cache
         score = None
         recommendation = None
+        CACHE_DIR = os.path.join(os.path.dirname(__file__), "cache")
         cache_file = os.path.join(CACHE_DIR, f"{ticker.upper()}.json")
         if os.path.exists(cache_file):
             try:
