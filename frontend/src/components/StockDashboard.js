@@ -367,8 +367,6 @@ export default function StockDashboard({ initialTicker, onBack }) {
         }
     };
 
-    const { watched, toggle: toggleWatch, pulse: watchPulse } = useWatchlist(display?.ticker || ticker);
-
     // Set absolute black background via global class addition ensuring total darkness
     useEffect(() => {
         document.documentElement.style.backgroundColor = '#000000';
@@ -585,6 +583,7 @@ export default function StockDashboard({ initialTicker, onBack }) {
     const display = data || {};
     const sub = display?.ai_analysis?.sub_scores || null;
     const xai = display?.ai_analysis?.xai_rationale || null;
+    const { watched, toggle: toggleWatch, pulse: watchPulse } = useWatchlist(display?.ticker || ticker);
     // Use activeChartData (driven by timeframe) instead of static chartData from server
     const rawChartData = activeChartData.length > 0 ? activeChartData : (display?.chartData || []);
 
