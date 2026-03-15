@@ -2,11 +2,13 @@ import json
 from typing import Any, AsyncGenerator, Dict, List
 
 from firebase_admin import firestore
+from google.genai import types
 from pydantic import BaseModel
 
-from analysis_engine import api_key, chat_with_agent, genai
+from analysis_engine import chat_with_agent
 from core.budget import record_llm_call
 from core.errors import ApiError
+from core.genai_client import api_key, build_content, stream_content
 from core.logger import log_event
 
 
@@ -25,6 +27,21 @@ class ChatAgentRequest(BaseModel):
     user_message: str
     target_agent: str
     context_score: int = None
+
+
+def _message_to_content(message: Dict[str, Any]) -> types.Content:
+    role = str(message.get("role") or "user").lower()
+    normalized_role = "model" if role in {"assistant", "model"} else ("tool" if role == "tool" else "user")
+    return build_content(normalized_role, message.get("parts") or [""])
+
+
+def _chunk_parts(chunk: Any) -> List[types.Part]:
+    if not getattr(chunk, "candidates", None):
+        return []
+    candidate = chunk.candidates[0]
+    if not candidate or not candidate.content:
+        return []
+    return list(candidate.content.parts or [])
 
 
 def get_portfolio(user_ref) -> List[Dict[str, Any]]:
@@ -123,28 +140,28 @@ async def portfolio_doctor_stream(request: DoctorChatRequest, user_ref, uid: str
             data["createdAt"] = data["createdAt"].isoformat()
         holdings.append(data)
 
-    update_user_profile_tool = {
-        "function_declarations": [
-            {
-                "name": "update_user_profile",
-                "description": "Updates the user's financial profile in the database.",
-                "parameters": {
-                    "type_": "OBJECT",
+    update_user_profile_tool = types.Tool(
+        function_declarations=[
+            types.FunctionDeclaration(
+                name="update_user_profile",
+                description="Updates the user's financial profile in the database.",
+                parameters_json_schema={
+                    "type": "object",
                     "properties": {
                         "key": {
-                            "type_": "STRING",
+                            "type": "string",
                             "description": "The profile key to update (Age, Investment_Horizon, Risk_Tolerance, Primary_Financial_Goal)",
                         },
                         "value": {
-                            "type_": "STRING",
+                            "type": "string",
                             "description": "The value to save for the profile key.",
                         },
                     },
                     "required": ["key", "value"],
                 },
-            }
+            )
         ]
-    }
+    )
 
     system_prompt = f"""Role:
 You are the "Chief Portfolio Doctor" for Consensus, an elite AI Wealth Management platform. Your ultimate goal is to ensure the user's stock portfolio perfectly aligns with their personal financial goals (Goal Alignment).
@@ -181,39 +198,44 @@ Speak directly to the user. Be professional, slightly witty, and highly analytic
 
     async def chat_stream() -> AsyncGenerator[str, None]:
         try:
-            gemini_history = []
-            for msg in request.messages[:-1]:
-                gemini_history.append(
-                    {
-                        "role": "user" if msg["role"] == "user" else "model",
-                        "parts": [msg["parts"][0]],
-                    }
-                )
+            if not request.messages:
+                raise ApiError(status_code=400, code="DOCTOR_EMPTY_MESSAGES", message="Messages are required")
 
-            model = genai.GenerativeModel(
-                "gemini-3-pro-preview",
-                tools=[update_user_profile_tool],
-                system_instruction=system_prompt,
-            )
-            chat = model.start_chat(history=gemini_history)
-
-            last_msg = request.messages[-1]["parts"][0]
+            history_contents = [_message_to_content(msg) for msg in request.messages[:-1]]
+            last_message = _message_to_content(request.messages[-1])
+            initial_contents = [*history_contents, last_message]
             record_llm_call("portfolio_doctor")
-            response = await chat.send_message_async(last_msg, stream=True)
+            response_stream = await stream_content(
+                initial_contents,
+                system_instruction=system_prompt,
+                tools=[update_user_profile_tool],
+                disable_automatic_function_calling=True,
+            )
 
-            tool_calls_to_make = []
-            async for chunk in response:
-                for part in chunk.parts:
+            tool_calls_to_make: List[types.Part] = []
+            seen_tool_calls = set()
+            model_response_parts: List[types.Part] = []
+
+            async for chunk in response_stream:
+                for part in _chunk_parts(chunk):
                     if part.function_call:
-                        tool_calls_to_make.append(part.function_call)
+                        fingerprint = (
+                            part.function_call.name,
+                            json.dumps(dict(part.function_call.args or {}), sort_keys=True),
+                        )
+                        if fingerprint not in seen_tool_calls:
+                            seen_tool_calls.add(fingerprint)
+                            tool_calls_to_make.append(part)
+                        model_response_parts.append(part)
                     elif part.text:
+                        model_response_parts.append(types.Part.from_text(text=part.text))
                         yield "data: " + json.dumps({"type": "text", "text": part.text}) + "\n\n"
 
-            await response.resolve()
-
             if tool_calls_to_make:
-                for function_call in tool_calls_to_make:
-                    if function_call.name != "update_user_profile":
+                tool_response_parts: List[types.Part] = []
+                for tool_call_part in tool_calls_to_make:
+                    function_call = tool_call_part.function_call
+                    if not function_call or function_call.name != "update_user_profile":
                         continue
 
                     key = function_call.args.get("key", "")
@@ -229,16 +251,29 @@ Speak directly to the user. Be professional, slightly witty, and highly analytic
 
                     yield "data: " + json.dumps({"type": "tool_call", "message": "System: User profile updated in memory."}) + "\n\n"
 
-                    tool_response_part = genai.protos.Part(
-                        function_response=genai.protos.FunctionResponse(
+                    tool_response_parts.append(
+                        types.Part.from_function_response(
                             name="update_user_profile",
-                            response={"result": "success"},
+                            response={"result": "success", "key": key, "value": value},
                         )
                     )
-                    follow_up = await chat.send_message_async(tool_response_part, stream=True)
-                    async for follow_chunk in follow_up:
-                        if follow_chunk.text:
-                            yield "data: " + json.dumps({"type": "text", "text": follow_chunk.text}) + "\n\n"
+
+                if tool_response_parts:
+                    record_llm_call("portfolio_doctor")
+                    follow_up_stream = await stream_content(
+                        [
+                            *initial_contents,
+                            build_content("model", model_response_parts),
+                            build_content("tool", tool_response_parts),
+                        ],
+                        system_instruction=system_prompt,
+                        tools=[update_user_profile_tool],
+                        disable_automatic_function_calling=True,
+                    )
+                    async for follow_chunk in follow_up_stream:
+                        for part in _chunk_parts(follow_chunk):
+                            if part.text:
+                                yield "data: " + json.dumps({"type": "text", "text": part.text}) + "\n\n"
 
             yield "data: " + json.dumps({"type": "done"}) + "\n\n"
         except Exception as exc:

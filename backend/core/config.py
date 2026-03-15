@@ -35,6 +35,7 @@ class Settings:
     cors_origins: List[str]
     admin_emails: Set[str]
     admin_claim_key: str
+    gemini_model: str
     firebase_credentials_file: str
     request_timeout_seconds: float
     search_timeout_seconds: float
@@ -72,6 +73,7 @@ def _build_settings() -> Settings:
         cors_origins=_parse_csv(os.getenv("ALLOWED_ORIGINS", ""), default_origins),
         admin_emails=admin_emails,
         admin_claim_key=os.getenv("ADMIN_CLAIM_KEY", "admin"),
+        gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.5-pro"),
         firebase_credentials_file=os.getenv("FIREBASE_CREDENTIALS_FILE", "firebase-credentials.json"),
         request_timeout_seconds=_parse_float(os.getenv("REQUEST_TIMEOUT_SECONDS"), 20.0),
         search_timeout_seconds=_parse_float(os.getenv("SEARCH_TIMEOUT_SECONDS"), 7.5),

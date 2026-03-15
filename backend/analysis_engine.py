@@ -1,30 +1,19 @@
 import os
 import json
 import asyncio
-import time
 from typing import AsyncGenerator
 from datetime import datetime, timedelta
 
 import yfinance as yf
-import pandas as pd
 import numpy as np
-from dotenv import load_dotenv
-import google.generativeai as genai
-
-# ─── Setup ────────────────────────────────────────────────────────────────────
-load_dotenv()
-api_key = os.environ.get("GEMINI_API_KEY")
-if api_key:
-    genai.configure(api_key=api_key)
+from core.genai_client import api_key, generate_text, get_model_name
 
 # Setup Caching
 CACHE_DIR = os.path.join(os.path.dirname(__file__), "cache")
 os.makedirs(CACHE_DIR, exist_ok=True)
 CACHE_TTL_SECONDS = 4 * 3600  # 4 hours
 
-MODEL_NAME = "gemini-3-pro-preview"
-GEN_CFG = genai.types.GenerationConfig(temperature=0.0)
-GEN_CFG_JSON = genai.types.GenerationConfig(temperature=0.0, response_mime_type="application/json")
+MODEL_NAME = get_model_name()
 
 
 def _safe_number(value, default=None):
@@ -317,26 +306,53 @@ Return ONLY a valid JSON object (no markdown, no explanation outside the JSON) w
   }}
 }}"""
 
+CIO_RESULT_SCHEMA = {
+    "type": "object",
+    "required": [
+        "Ticker",
+        "Recommendation_Score",
+        "Classification",
+        "Expected_Trend_1_to_6_Months",
+        "XAI_Rationale",
+        "Sub_Scores",
+    ],
+    "properties": {
+        "Ticker": {"type": "string"},
+        "Recommendation_Score": {"type": "integer"},
+        "Classification": {"type": "string"},
+        "Expected_Trend_1_to_6_Months": {"type": "string"},
+        "XAI_Rationale": {
+            "type": "object",
+            "required": ["Top_Positive_Drivers", "Top_Negative_Drivers"],
+            "properties": {
+                "Top_Positive_Drivers": {"type": "array", "items": {"type": "string"}},
+                "Top_Negative_Drivers": {"type": "array", "items": {"type": "string"}},
+            },
+        },
+        "Sub_Scores": {
+            "type": "object",
+            "required": ["Fundamental", "Technical", "Sentiment", "Macro_Risk"],
+            "properties": {
+                "Fundamental": {"type": "integer"},
+                "Technical": {"type": "integer"},
+                "Sentiment": {"type": "integer"},
+                "Macro_Risk": {"type": "integer"},
+            },
+        },
+    },
+}
+
 
 # ─── Async Agent Runner with Retry ────────────────────────────────────────────
 
 async def _call_agent_async(prompt: str, use_json: bool = False, max_retries: int = 3) -> str:
-    """Calls Gemini asynchronously with retry on rate-limit errors."""
-    model = genai.GenerativeModel(MODEL_NAME)
-    cfg = GEN_CFG_JSON if use_json else GEN_CFG
-
-    for attempt in range(max_retries):
-        try:
-            response = await model.generate_content_async(prompt, generation_config=cfg)
-            return response.text
-        except Exception as e:
-            err = str(e)
-            if "429" in err or "quota" in err.lower() or "rate" in err.lower():
-                wait = 2 ** attempt * 5
-                await asyncio.sleep(wait)
-            else:
-                raise
-    raise RuntimeError(f"Agent failed after {max_retries} retries.")
+    """Calls Gemini asynchronously with retry on transient provider errors."""
+    return await generate_text(
+        prompt,
+        use_json=use_json,
+        response_json_schema=CIO_RESULT_SCHEMA if use_json else None,
+        max_retries=max_retries,
+    )
 
 
 # ─── Main Analysis Function (SSE Stream) ──────────────────────────────────────
