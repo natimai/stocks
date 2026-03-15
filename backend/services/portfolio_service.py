@@ -277,13 +277,15 @@ Speak directly to the user. Be professional, slightly witty, and highly analytic
 
             yield "data: " + json.dumps({"type": "done"}) + "\n\n"
         except Exception as exc:
+            error_message = exc.message if isinstance(exc, ApiError) else str(exc)
             log_event(
                 "error",
                 "portfolio_doctor.stream_failed",
                 uid=uid,
                 errorType=type(exc).__name__,
-                errorMessage=str(exc),
+                errorCode=exc.code if isinstance(exc, ApiError) else None,
+                errorMessage=error_message,
             )
-            yield "data: " + json.dumps({"type": "error", "message": str(exc)}) + "\n\n"
+            yield "data: " + json.dumps({"type": "error", "message": error_message}) + "\n\n"
 
     return chat_stream()

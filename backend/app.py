@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -15,11 +17,25 @@ from routers.telemetry import router as telemetry_router
 from routers.users import router as users_router
 
 
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    init_firebase()
+    log_event(
+        "info",
+        "app.startup",
+        env=settings.env,
+        corsOrigins=settings.cors_origins,
+        adminClaimKey=settings.admin_claim_key,
+    )
+    yield
+
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="US Stock Analysis API",
         description="Backend for the SaaS fintech dashboard",
         version="2.0.0",
+        lifespan=lifespan,
     )
 
     init_monitoring()
@@ -42,17 +58,6 @@ def create_app() -> FastAPI:
     app.include_router(stocks_router)
     app.include_router(portfolio_router)
     app.include_router(telemetry_router)
-
-    @app.on_event("startup")
-    async def _startup() -> None:
-        init_firebase()
-        log_event(
-            "info",
-            "app.startup",
-            env=settings.env,
-            corsOrigins=settings.cors_origins,
-            adminClaimKey=settings.admin_claim_key,
-        )
 
     return app
 
