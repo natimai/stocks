@@ -33,7 +33,7 @@ jobs:
       - name: Backend Smoke
         env:
           PYTHONPATH: backend
-        run: python -c "from app import app; print(app.title)"
+        run: python -c "import sys; assert sys.version_info[:2] >= (3, 11); from app import app; print(app.title)"
 
       - name: Security Check (Python)
         continue-on-error: true

@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, Loader2, Clock, X } from 'lucide-react';
 import { apiGet } from '../lib/apiClient';
+import { TickerLogoImage } from './RemoteImage';
 
 const HISTORY_KEY = 'consensusai_search_history';
 const MAX_HISTORY = 8;
@@ -154,11 +155,12 @@ export default function CommandPalette({ onSelect }) {
                                             >
                                                 <div className="flex items-center gap-3 min-w-0">
                                                     <div className="w-7 h-7 rounded-full bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
-                                                        <img
-                                                            src={`https://img.logokit.com/ticker/${item.symbol}?token=pk_frfa213068bb8ffac35321&size=64`}
+                                                        <TickerLogoImage
+                                                            ticker={item.symbol}
                                                             alt={item.symbol}
+                                                            size={28}
+                                                            query="size=64"
                                                             className="w-full h-full object-contain p-1"
-                                                            onError={(e) => { e.target.style.display = 'none'; }}
                                                         />
                                                     </div>
                                                     <div className="min-w-0">
@@ -195,11 +197,12 @@ export default function CommandPalette({ onSelect }) {
                                         >
                                             <div className="flex items-center gap-3 min-w-0">
                                                 <div className="w-7 h-7 rounded-full bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
-                                                    <img
-                                                        src={`https://img.logokit.com/ticker/${item.symbol}?token=pk_frfa213068bb8ffac35321&size=64`}
+                                                    <TickerLogoImage
+                                                        ticker={item.symbol}
                                                         alt={item.symbol}
+                                                        size={28}
+                                                        query="size=64"
                                                         className="w-full h-full object-contain p-1"
-                                                        onError={(e) => { e.target.style.display = 'none'; }}
                                                     />
                                                 </div>
                                                 <div className="min-w-0">

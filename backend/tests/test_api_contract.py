@@ -1,8 +1,8 @@
 from fastapi.testclient import TestClient
 
 from app import app
-from core.auth import verify_token_and_check_limit
-from routers import stocks
+from core.auth import verify_token, verify_token_and_check_limit
+from routers import portfolio, stocks
 
 
 def _dummy_user_context():
@@ -106,4 +106,49 @@ def test_analyze_invalid_ticker_contract():
     body = response.json()
     assert response.status_code == 400
     assert body["error"]["code"] == "INVALID_TICKER"
+    assert body["requestId"]
+
+
+def test_portfolio_doctor_chat_sse_contract(monkeypatch):
+    async def _fake_stream(_request_body, _user_ref, _uid):
+        async def _generator():
+            yield 'data: {"type": "text", "text": "Hello from the doctor"}\n\n'
+            yield 'data: {"type": "done"}\n\n'
+
+        return _generator()
+
+    monkeypatch.setattr(portfolio, "portfolio_doctor_stream", _fake_stream)
+    app.dependency_overrides[verify_token] = _dummy_user_context
+
+    try:
+        with TestClient(app) as client:
+            with client.stream(
+                "POST",
+                "/api/portfolio-doctor/chat",
+                json={"messages": [{"role": "user", "parts": ["Analyze my portfolio"]}]},
+            ) as response:
+                body = "".join(response.iter_text())
+                status_code = response.status_code
+                content_type = response.headers.get("content-type", "")
+                request_id = response.headers.get("x-request-id")
+    finally:
+        app.dependency_overrides.pop(verify_token, None)
+
+    assert status_code == 200
+    assert content_type.startswith("text/event-stream")
+    assert '"type": "text"' in body
+    assert '"type": "done"' in body
+    assert request_id
+
+
+def test_portfolio_doctor_chat_requires_auth():
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/portfolio-doctor/chat",
+            json={"messages": [{"role": "user", "parts": ["Analyze my portfolio"]}]},
+        )
+
+    body = response.json()
+    assert response.status_code == 401
+    assert body["error"]["code"] == "AUTH_REQUIRED"
     assert body["requestId"]

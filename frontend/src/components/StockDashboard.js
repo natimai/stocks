@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Activity, ArrowLeft,
@@ -13,6 +14,7 @@ import RollingPrice from './RollingPrice';
 import { auth, googleProvider } from '../lib/firebase';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import { apiGet, apiPost, buildApiUrl, generateRequestId } from '../lib/apiClient';
+import { RemoteImage, TickerLogoImage } from './RemoteImage';
 
 const InteractiveChart = dynamic(() => import('./CandlestickChart'), {
     ssr: false,
@@ -760,7 +762,7 @@ export default function StockDashboard({ initialTicker, onBack }) {
                                 className="appearance-none bg-transparent border-0 p-0 flex items-center gap-2.5 group cursor-pointer min-w-0"
                             >
                                 <div className="shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-colors group-hover:opacity-80">
-                                    <img src="/logo.svg" alt="ConsensusAI Logo" className="w-full h-full object-contain" />
+                                    <Image src="/logo.svg" alt="ConsensusAI Logo" width={48} height={48} className="w-full h-full object-contain" priority />
                                 </div>
                                 <span className="truncate font-bold tracking-tight text-lg sm:text-xl text-white/90">Consensus<span className="text-[#00C805]">AI</span></span>
                             </button>
@@ -818,9 +820,9 @@ export default function StockDashboard({ initialTicker, onBack }) {
                         {user ? (
                             <div className="flex items-center gap-3">
                                 <div className="flex items-center gap-2">
-                                    <div className="w-8 h-8 rounded-full bg-[#1E1E24] overflow-hidden">
+                                    <div className="relative w-8 h-8 rounded-full bg-[#1E1E24] overflow-hidden">
                                         {user.photoURL ? (
-                                            <img src={user.photoURL} alt="User avatar" className="w-full h-full object-cover" />
+                                            <RemoteImage src={user.photoURL} alt="User avatar" fill sizes="32px" className="object-cover" />
                                         ) : (
                                             <div className="w-full h-full flex items-center justify-center">
                                                 <User className="w-3.5 h-3.5 text-white/60" />
@@ -882,11 +884,12 @@ export default function StockDashboard({ initialTicker, onBack }) {
                     <div className="flex flex-col gap-2 items-start flex-1">
                         <div className="flex items-start sm:items-center gap-3 min-w-0">
                             <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full overflow-hidden bg-white/10 flex items-center justify-center shrink-0 border border-white/5">
-                                <img
-                                    src={`https://img.logokit.com/ticker/${display?.ticker || ticker}?token=pk_frfa213068bb8ffac35321&size=128&fallback=monogram`}
+                                <TickerLogoImage
+                                    ticker={display?.ticker || ticker}
                                     alt={`${display?.ticker || ticker} logo`}
+                                    size={48}
+                                    query="size=128&fallback=monogram"
                                     className="w-full h-full object-contain p-1.5"
-                                    onError={(e) => { e.target.onerror = null; e.target.style.display = 'none'; }}
                                 />
                             </div>
                             <h1 className="text-[24px] sm:text-[32px] font-bold tracking-tight text-white/90 leading-tight sm:leading-none m-0 truncate max-w-[65vw] sm:max-w-none">
@@ -1334,8 +1337,8 @@ export default function StockDashboard({ initialTicker, onBack }) {
                         {/* Chat Header */}
                         <div className="bg-[#202C33] px-4 py-3 flex items-center gap-3 shadow-md z-10 shrink-0">
                             <div className="w-10 h-10 rounded-full bg-[#111114] flex items-center justify-center shrink-0 border border-white/10 relative overflow-hidden">
-                                <img src="/avatars/The Bull.svg" alt="" className="absolute top-0 left-0 w-[55%] h-[55%] object-cover" />
-                                <img src="/avatars/The CIO Agent.svg" alt="" className="absolute bottom-0 right-0 w-[55%] h-[55%] object-cover" />
+                                <Image src="/avatars/The Bull.svg" alt="" width={22} height={22} className="absolute top-0 left-0 w-[55%] h-[55%] object-cover" />
+                                <Image src="/avatars/The CIO Agent.svg" alt="" width={22} height={22} className="absolute bottom-0 right-0 w-[55%] h-[55%] object-cover" />
                             </div>
                             <div className="flex flex-col">
                                 <span className="text-white/90 font-medium text-[15px]">AI Strategy Committee</span>
@@ -1399,8 +1402,8 @@ export default function StockDashboard({ initialTicker, onBack }) {
                                             transition={{ duration: 0.35, delay: i * 0.15, ease: "easeOut" }}
                                             className={`flex gap-2.5 w-full items-end mt-4 ${isRight ? 'flex-row-reverse' : 'flex-row'}`}
                                         >
-                                            <div className="w-8 h-8 rounded-full overflow-hidden shrink-0">
-                                                <img src={agent.avatar} alt={agent.name} className="w-full h-full object-cover" />
+                                            <div className="relative w-8 h-8 rounded-full overflow-hidden shrink-0">
+                                                <Image src={agent.avatar} alt={agent.name} fill sizes="32px" className="object-cover" />
                                             </div>
 
                                             <div className={`flex flex-col max-w-[75%] ${isRight ? 'items-end' : 'items-start'}`}>
@@ -1439,8 +1442,8 @@ export default function StockDashboard({ initialTicker, onBack }) {
                                                     <User className="w-4 h-4 text-[#0A84FF]" />
                                                 </div>
                                             ) : (
-                                                <div className="w-8 h-8 rounded-full overflow-hidden shrink-0">
-                                                    <img src={msg.avatar} alt={msg.name} className="w-full h-full object-cover" />
+                                                <div className="relative w-8 h-8 rounded-full overflow-hidden shrink-0">
+                                                    <Image src={msg.avatar} alt={msg.name} fill sizes="32px" className="object-cover" />
                                                 </div>
                                             )}
 
@@ -1531,7 +1534,7 @@ export default function StockDashboard({ initialTicker, onBack }) {
                     <div className="flex flex-col md:flex-row justify-between items-start gap-8 mb-12">
                         <div className="max-w-xs">
                             <div className="flex items-center gap-2 mb-4">
-                                <img src="/logo.svg" alt="ConsensusAI Logo" className="w-4 h-4" />
+                                <Image src="/logo.svg" alt="ConsensusAI Logo" width={16} height={16} className="w-4 h-4" />
                                 <span className="font-semibold tracking-tight text-white/50">ConsensusAI</span>
                             </div>
                             <p className="text-xs text-white/40 leading-relaxed">

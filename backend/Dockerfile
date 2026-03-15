@@ -1,14 +1,16 @@
 FROM python:3.11-slim
 
 WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
 
 # Install dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source code
-COPY app.py .
-COPY analysis_engine.py .
+COPY . .
 
 # Firebase credentials will be injected via Cloud Run Secret Manager env var
 # No firebase-credentials.json needed here

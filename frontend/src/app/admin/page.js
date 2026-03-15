@@ -1,5 +1,6 @@
 'use client';
 import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { auth, googleProvider } from '../../lib/firebase';
 import { signInWithPopup, onAuthStateChanged } from 'firebase/auth';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -123,7 +124,7 @@ export default function AdminPage() {
                         <a href="/" className="touch-target text-white/40 hover:text-white transition-colors flex items-center justify-center rounded-full">
                             <ArrowLeft className="w-5 h-5" />
                         </a>
-                        <img src="/logo.svg" alt="ConsensusAI Logo" className="w-5 h-5 shrink-0" />
+                        <Image src="/logo.svg" alt="ConsensusAI Logo" width={20} height={20} className="w-5 h-5 shrink-0" />
                         <span className="font-bold tracking-tight truncate">ConsensusAI Admin</span>
                         <span className="text-[10px] sm:text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider shrink-0">Staff Only</span>
                     </div>

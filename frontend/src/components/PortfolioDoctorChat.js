@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Send, Activity, CheckCheck } from 'lucide-react';
 import { auth } from '../lib/firebase';
@@ -170,8 +171,8 @@ export default function PortfolioDoctorChat({ isOpen, onClose }) {
                     {/* Header */}
                     <div className="bg-[#111114] border-b border-white/10 px-4 sm:px-6 py-4 flex items-center justify-between shrink-0 pt-safe">
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full overflow-hidden border border-white/10 shrink-0">
-                                <img src="/avatars/The CIO Agent.svg" alt="Portfolio Doctor" className="w-full h-full object-cover" />
+                            <div className="relative w-10 h-10 rounded-full overflow-hidden border border-white/10 shrink-0">
+                                <Image src="/avatars/The CIO Agent.svg" alt="Portfolio Doctor" fill sizes="40px" className="object-cover" />
                             </div>
                             <div>
                                 <h3 className="text-white font-semibold text-[16px]">Portfolio Doctor</h3>
@@ -198,8 +199,8 @@ export default function PortfolioDoctorChat({ isOpen, onClose }) {
                                     className={`flex gap-3 w-full items-end ${isUser ? 'flex-row-reverse' : 'flex-row'}`}
                                 >
                                     {!isUser && (
-                                        <div className="w-8 h-8 rounded-full overflow-hidden shrink-0">
-                                            <img src="/avatars/The CIO Agent.svg" alt="Doctor" className="w-full h-full object-cover" />
+                                        <div className="relative w-8 h-8 rounded-full overflow-hidden shrink-0">
+                                            <Image src="/avatars/The CIO Agent.svg" alt="Doctor" fill sizes="32px" className="object-cover" />
                                         </div>
                                     )}
 
@@ -222,8 +223,8 @@ export default function PortfolioDoctorChat({ isOpen, onClose }) {
                                 animate={{ opacity: 1, y: 0 }}
                                 className="flex gap-3 w-full items-end mt-4"
                             >
-                                <div className="w-8 h-8 rounded-full overflow-hidden shrink-0">
-                                    <img src="/avatars/The CIO Agent.svg" alt="Doctor" className="w-full h-full object-cover" />
+                                <div className="relative w-8 h-8 rounded-full overflow-hidden shrink-0">
+                                    <Image src="/avatars/The CIO Agent.svg" alt="Doctor" fill sizes="32px" className="object-cover" />
                                 </div>
                                 <div className="bg-[#2C2C2E] rounded-[20px] rounded-bl-none px-5 py-4 inline-flex items-center gap-1.5 self-end min-h-[44px]">
                                     <span className="w-1.5 h-1.5 bg-white/50 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>

@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import dynamic from 'next/dynamic';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Activity, Search, TrendingUp, TrendingDown, BarChart2,
@@ -10,6 +11,7 @@ import {
 import { auth, googleProvider } from '../lib/firebase';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import { apiGet, apiPatch } from '../lib/apiClient';
+import { RemoteImage, TickerLogoImage } from './RemoteImage';
 
 const PortfolioManager = dynamic(() => import('./PortfolioManager'), {
     ssr: false,
@@ -142,11 +144,11 @@ function StockCard({ stock, onSearch, index }) {
             {/* Top row */}
             <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-3">
-                    <img
-                        src={`https://img.logokit.com/ticker/${stock.ticker}?token=pk_frfa213068bb8ffac35321`}
+                    <TickerLogoImage
+                        ticker={stock.ticker}
                         alt={`${stock.ticker} logo`}
+                        size={36}
                         className="w-9 h-9 rounded-full bg-white/5 object-contain p-1 shrink-0"
-                        onError={(e) => { e.target.onerror = null; e.target.style.display = 'none'; }}
                     />
                     <div>
                         <div className="text-base font-bold text-white tracking-tight">{stock.ticker}</div>
@@ -386,7 +388,7 @@ export default function HomeDashboard({ onSearch }) {
                     {/* Logo */}
                     <div className="flex items-center gap-3">
                         <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center">
-                            <img src="/logo.svg" alt="ConsensusAI Logo" className="w-full h-full object-contain" />
+                            <Image src="/logo.svg" alt="ConsensusAI Logo" width={56} height={56} className="w-full h-full object-contain" priority />
                         </div>
                         <span className="font-bold text-xl tracking-tight text-white">
                             Consensus<span className="text-[#00C805]">AI</span>
@@ -418,9 +420,9 @@ export default function HomeDashboard({ onSearch }) {
                         {user ? (
                             <div className="flex items-center gap-3">
                                 <div className="flex items-center gap-2">
-                                    <div className="w-8 h-8 rounded-full bg-[#1E1E24] overflow-hidden">
+                                    <div className="relative w-8 h-8 rounded-full bg-[#1E1E24] overflow-hidden">
                                         {user.photoURL ? (
-                                            <img src={user.photoURL} alt="User avatar" className="w-full h-full object-cover" />
+                                            <RemoteImage src={user.photoURL} alt="User avatar" fill sizes="32px" className="object-cover" />
                                         ) : (
                                             <div className="w-full h-full flex items-center justify-center">
                                                 <User className="w-3.5 h-3.5 text-white/60" />
@@ -763,11 +765,12 @@ export default function HomeDashboard({ onSearch }) {
                                             >
                                                 {/* Logo */}
                                                 <div className="w-8 h-8 rounded-full bg-white/10 border border-white/10 flex items-center justify-center overflow-hidden mr-3 shrink-0">
-                                                    <img
-                                                        src={`https://img.logokit.com/ticker/${item.ticker}?token=pk_frfa213068bb8ffac35321&size=64`}
+                                                    <TickerLogoImage
+                                                        ticker={item.ticker}
                                                         alt={item.ticker}
+                                                        size={32}
+                                                        query="size=64"
                                                         className="w-full h-full object-contain p-1"
-                                                        onError={(e) => { e.target.style.display = 'none'; }}
                                                     />
                                                 </div>
                                                 {/* Ticker & Name */}
@@ -859,11 +862,11 @@ export default function HomeDashboard({ onSearch }) {
                                             <div className="flex items-center gap-4">
                                                 <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 overflow-hidden bg-white/5"
                                                     style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
-                                                    <img
-                                                        src={`https://img.logokit.com/ticker/${scan.ticker}?token=pk_frfa213068bb8ffac35321`}
+                                                    <TickerLogoImage
+                                                        ticker={scan.ticker}
                                                         alt={`${scan.ticker} logo`}
+                                                        size={40}
                                                         className="w-full h-full object-contain p-1.5"
-                                                        onError={(e) => { e.target.onerror = null; e.target.style.display = 'none'; }}
                                                     />
                                                 </div>
                                                 <div>
@@ -1014,7 +1017,7 @@ export default function HomeDashboard({ onSearch }) {
                     >
                         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-2">
-                                <img src="/logo.svg" alt="ConsensusAI" className="w-3.5 h-3.5" />
+                                <Image src="/logo.svg" alt="ConsensusAI" width={14} height={14} className="w-3.5 h-3.5" />
                                 <span className="text-xs text-white/20 font-semibold">ConsensusAI</span>
                             </div>
                             <p className="text-xs text-white/20">© 2026 ConsensusAI Technologies. For informational purposes only. Not financial advice.</p>

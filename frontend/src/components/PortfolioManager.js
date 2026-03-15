@@ -1,5 +1,6 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trash2, Plus, Layers, Edit2, Check, X, AlertTriangle } from 'lucide-react';
 import { auth } from '../lib/firebase';
@@ -626,10 +627,10 @@ export default function PortfolioManager() {
 
                         {/* Agent Avatars */}
                         <div className="flex -space-x-2.5">
-                            <div className="w-8 h-8 rounded-full border-2 border-[#111114] bg-[#1E1E24] overflow-hidden shrink-0 shadow-sm relative z-[4]"><img src="/avatars/The Bull.svg" alt="Bull" className="w-full h-full object-cover" /></div>
-                            <div className="w-8 h-8 rounded-full border-2 border-[#111114] bg-[#1E1E24] overflow-hidden shrink-0 shadow-sm relative z-[3]"><img src="/avatars/bear.svg" alt="Bear" className="w-full h-full object-cover" /></div>
-                            <div className="w-8 h-8 rounded-full border-2 border-[#111114] bg-[#1E1E24] overflow-hidden shrink-0 shadow-sm relative z-[2]"><img src="/avatars/The Quant.svg" alt="Quant" className="w-full h-full object-cover" /></div>
-                            <div className="w-8 h-8 rounded-full border-2 border-[#111114] bg-[#1E1E24] overflow-hidden shrink-0 shadow-sm relative z-[1]"><img src="/avatars/The CIO Agent.svg" alt="CIO" className="w-full h-full object-cover" /></div>
+                            <div className="w-8 h-8 rounded-full border-2 border-[#111114] bg-[#1E1E24] overflow-hidden shrink-0 shadow-sm relative z-[4]"><Image src="/avatars/The Bull.svg" alt="Bull" fill sizes="32px" className="object-cover" /></div>
+                            <div className="w-8 h-8 rounded-full border-2 border-[#111114] bg-[#1E1E24] overflow-hidden shrink-0 shadow-sm relative z-[3]"><Image src="/avatars/bear.svg" alt="Bear" fill sizes="32px" className="object-cover" /></div>
+                            <div className="w-8 h-8 rounded-full border-2 border-[#111114] bg-[#1E1E24] overflow-hidden shrink-0 shadow-sm relative z-[2]"><Image src="/avatars/The Quant.svg" alt="Quant" fill sizes="32px" className="object-cover" /></div>
+                            <div className="w-8 h-8 rounded-full border-2 border-[#111114] bg-[#1E1E24] overflow-hidden shrink-0 shadow-sm relative z-[1]"><Image src="/avatars/The CIO Agent.svg" alt="CIO" fill sizes="32px" className="object-cover" /></div>
                         </div>
 
                         {/* Text */}
