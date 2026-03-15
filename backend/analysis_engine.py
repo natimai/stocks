@@ -26,6 +26,217 @@ MODEL_NAME = "gemini-3-pro-preview"
 GEN_CFG = genai.types.GenerationConfig(temperature=0.0)
 GEN_CFG_JSON = genai.types.GenerationConfig(temperature=0.0, response_mime_type="application/json")
 
+
+def _safe_number(value, default=None):
+    try:
+        if value is None:
+            return default
+        parsed = float(value)
+        if np.isnan(parsed):
+            return default
+        return parsed
+    except (TypeError, ValueError):
+        return default
+
+
+def _clamp_score(value, default=50):
+    parsed = _safe_number(value, default)
+    if parsed is None:
+        return default
+    return int(max(0, min(100, round(parsed))))
+
+
+def _completeness_ratio(values):
+    if not values:
+        return 0.0
+    valid = sum(1 for value in values if _safe_number(value) is not None)
+    return valid / len(values)
+
+
+def _bucket_market_cap(market_cap):
+    cap = _safe_number(market_cap, 0) or 0
+    if cap >= 200_000_000_000:
+        return "mega_cap"
+    if cap >= 10_000_000_000:
+        return "large_cap"
+    if cap >= 2_000_000_000:
+        return "mid_cap"
+    return "small_cap"
+
+
+def _classify_score(score):
+    if score >= 85:
+        return "STRONG BUY"
+    if score >= 70:
+        return "BUY"
+    if score >= 45:
+        return "HOLD"
+    if score >= 25:
+        return "SELL"
+    return "STRONG SELL"
+
+
+def _fundamental_signal(fundamentals):
+    score = 50.0
+    pe = _safe_number(fundamentals.get("P_E_Ratio"))
+    sector_pe = _safe_number(fundamentals.get("Sector_P_E_Median"), 25.0)
+    peg = _safe_number(fundamentals.get("PEG_Ratio"))
+    roe = _safe_number(fundamentals.get("ROE_pct"))
+    debt = _safe_number(fundamentals.get("Debt_to_Equity"))
+    fcf_yield = _safe_number(fundamentals.get("Free_Cash_Flow_Yield_pct"))
+    eps_growth = _safe_number(fundamentals.get("5Y_EPS_Growth_Rate_pct"))
+
+    if pe is not None and sector_pe:
+        premium_pct = ((pe - sector_pe) / sector_pe) * 100
+        if premium_pct <= -15:
+            score += 10
+        elif premium_pct <= 10:
+            score += 3
+        elif premium_pct >= 50:
+            score -= 12
+        elif premium_pct >= 25:
+            score -= 7
+
+    if peg is not None:
+        if peg <= 1.2:
+            score += 10
+        elif peg <= 2.0:
+            score += 4
+        elif peg >= 3.0:
+            score -= 8
+
+    if roe is not None:
+        if roe >= 20:
+            score += 12
+        elif roe >= 12:
+            score += 6
+        elif roe < 5:
+            score -= 8
+
+    if debt is not None:
+        if debt <= 0.8:
+            score += 8
+        elif debt <= 1.5:
+            score += 2
+        elif debt >= 2.5:
+            score -= 10
+
+    if fcf_yield is not None:
+        if fcf_yield >= 5:
+            score += 10
+        elif fcf_yield >= 2:
+            score += 4
+        elif fcf_yield < 0:
+            score -= 10
+
+    if eps_growth is not None:
+        if eps_growth >= 20:
+            score += 12
+        elif eps_growth >= 8:
+            score += 5
+        elif eps_growth < 0:
+            score -= 12
+
+    return _clamp_score(score)
+
+
+def _technical_signal(technicals):
+    score = 50.0
+    current_price = _safe_number(technicals.get("Current_Price"))
+    sma50 = _safe_number(technicals.get("SMA_50"))
+    sma200 = _safe_number(technicals.get("SMA_200"))
+    rsi = _safe_number(technicals.get("RSI_14"))
+    williams_r = _safe_number(technicals.get("Williams_R"))
+    macd_signal = str(technicals.get("MACD_Signal") or "").lower()
+    volume_momentum = str(technicals.get("Volume_Momentum") or "").lower()
+
+    if current_price is not None and sma50 is not None:
+        score += 8 if current_price > sma50 else -8
+    if current_price is not None and sma200 is not None:
+        score += 10 if current_price > sma200 else -10
+    if sma50 is not None and sma200 is not None:
+        score += 6 if sma50 > sma200 else -6
+
+    if rsi is not None:
+        if 45 <= rsi <= 65:
+            score += 8
+        elif 35 <= rsi < 45 or 65 < rsi <= 75:
+            score += 2
+        else:
+            score -= 8
+
+    if williams_r is not None:
+        if -80 <= williams_r <= -20:
+            score += 4
+        else:
+            score -= 4
+
+    if "bullish" in macd_signal:
+        score += 8
+    elif "bearish" in macd_signal:
+        score -= 8
+
+    if "expanding" in volume_momentum:
+        score += 4
+    elif "contracting" in volume_momentum:
+        score -= 4
+
+    return _clamp_score(score)
+
+
+def _sentiment_signal(sentiment):
+    score = 50.0
+    news_score = _safe_number(sentiment.get("FinBERT_News_Score_Approx"))
+    headline_count = len(sentiment.get("Recent_Headlines") or [])
+    social = str(sentiment.get("Overnight_Social_Sentiment") or "").lower()
+
+    if news_score is not None:
+        score += (news_score - 0.5) * 40
+    if headline_count >= 4:
+        score += 6
+    elif headline_count == 0:
+        score -= 6
+
+    if "positive" in social or "bull" in social:
+        score += 6
+    elif "negative" in social or "bear" in social:
+        score -= 6
+
+    return _clamp_score(score)
+
+
+def _macro_signal(macro_risk, market_cap_bucket):
+    score = 50.0
+    vix = _safe_number(macro_risk.get("VIX_Level"))
+    beta = _safe_number(macro_risk.get("Stock_Beta"))
+    pe_premium = _safe_number((macro_risk.get("Valuation_vs_Sector") or {}).get("P_E_Premium_pct"))
+
+    if vix is not None:
+        if vix <= 16:
+            score += 10
+        elif vix <= 22:
+            score += 2
+        elif vix >= 30:
+            score -= 14
+        else:
+            score -= 6
+
+    if beta is not None:
+        if market_cap_bucket in {"mega_cap", "large_cap"}:
+            score += 6 if beta <= 1.1 else (-8 if beta >= 1.5 else -2)
+        else:
+            score += 4 if beta <= 1.3 else (-10 if beta >= 2.0 else -3)
+
+    if pe_premium is not None:
+        if pe_premium >= 50:
+            score -= 10
+        elif pe_premium >= 20:
+            score -= 5
+        elif pe_premium <= -10:
+            score += 4
+
+    return _clamp_score(score)
+
 # ─── Agent Prompts ────────────────────────────────────────────────────────────
 
 BULL_PROMPT = """You are an aggressive Bullish Equity Analyst. Your job is to find the most compelling fundamental and growth reasons to BUY this stock.
@@ -358,22 +569,91 @@ async def analyze_stock_stream(ticker: str, target_date: str = None) -> AsyncGen
         except json.JSONDecodeError:
             raise ValueError(f"CIO Agent returned invalid JSON. Raw output: {cio_raw[:300]}")
 
-        score = llm_result.get("Recommendation_Score", 50)
-        recommendation = llm_result.get("Classification", "HOLD").upper()
         summary = llm_result.get("Expected_Trend_1_to_6_Months", "")
-        sub_scores = llm_result.get("Sub_Scores", {}) or {}
+        llm_sub_scores = llm_result.get("Sub_Scores", {}) or {}
+        market_cap_bucket = _bucket_market_cap(info.get("marketCap"))
+        completeness = {
+            "Fundamental": _completeness_ratio(
+                [
+                    fundamentals.get("P_E_Ratio"),
+                    fundamentals.get("P_B_Ratio"),
+                    fundamentals.get("PEG_Ratio"),
+                    fundamentals.get("ROE_pct"),
+                    fundamentals.get("Debt_to_Equity"),
+                    fundamentals.get("Free_Cash_Flow_Yield_pct"),
+                    fundamentals.get("5Y_EPS_Growth_Rate_pct"),
+                ]
+            ),
+            "Technical": _completeness_ratio(
+                [
+                    technicals.get("Current_Price"),
+                    technicals.get("SMA_50"),
+                    technicals.get("SMA_200"),
+                    technicals.get("RSI_14"),
+                    technicals.get("Williams_R"),
+                ]
+            ),
+            "Sentiment": _completeness_ratio(
+                [
+                    sentiment.get("FinBERT_News_Score_Approx"),
+                    len(sentiment.get("Recent_Headlines") or []),
+                ]
+            ),
+            "Macro_Risk": _completeness_ratio(
+                [
+                    macro_risk.get("VIX_Level"),
+                    macro_risk.get("Stock_Beta"),
+                    (macro_risk.get("Valuation_vs_Sector") or {}).get("P_E_Premium_pct"),
+                ]
+            ),
+        }
 
-        numeric_sub_scores = []
-        for value in sub_scores.values():
-            try:
-                numeric_sub_scores.append(float(value))
-            except (TypeError, ValueError):
-                continue
-        if numeric_sub_scores:
-            score_spread = max(numeric_sub_scores) - min(numeric_sub_scores)
-            analysis_confidence = max(40, min(98, int(100 - (score_spread * 0.8))))
-        else:
-            analysis_confidence = 55
+        deterministic_sub_scores = {
+            "Fundamental": _fundamental_signal(fundamentals),
+            "Technical": _technical_signal(technicals),
+            "Sentiment": _sentiment_signal(sentiment),
+            "Macro_Risk": _macro_signal(macro_risk, market_cap_bucket),
+        }
+
+        calibrated_sub_scores = {}
+        domain_confidence = {}
+        deltas = []
+        for key, deterministic_score in deterministic_sub_scores.items():
+            llm_score = _clamp_score(llm_sub_scores.get(key), deterministic_score)
+            completeness_ratio = completeness.get(key, 0.5)
+            llm_weight = 0.5 + (completeness_ratio * 0.2)
+            deterministic_weight = 1.0 - llm_weight
+            calibrated_score = round((llm_score * llm_weight) + (deterministic_score * deterministic_weight))
+            calibrated_sub_scores[key] = _clamp_score(calibrated_score, deterministic_score)
+
+            delta = abs(llm_score - deterministic_score)
+            deltas.append(delta)
+            domain_confidence[key] = max(35, min(99, int((completeness_ratio * 100) - (delta * 0.45) + 28)))
+
+        score_weights = {
+            "mega_cap": {"Fundamental": 0.42, "Technical": 0.26, "Sentiment": 0.12, "Macro_Risk": 0.20},
+            "large_cap": {"Fundamental": 0.40, "Technical": 0.28, "Sentiment": 0.14, "Macro_Risk": 0.18},
+            "mid_cap": {"Fundamental": 0.37, "Technical": 0.30, "Sentiment": 0.15, "Macro_Risk": 0.18},
+            "small_cap": {"Fundamental": 0.32, "Technical": 0.28, "Sentiment": 0.18, "Macro_Risk": 0.22},
+        }[market_cap_bucket]
+
+        score = round(
+            sum(calibrated_sub_scores[key] * weight for key, weight in score_weights.items())
+        )
+        recommendation = _classify_score(score)
+
+        avg_delta = sum(deltas) / len(deltas) if deltas else 18
+        avg_completeness = sum(completeness.values()) / len(completeness) if completeness else 0.5
+        analysis_confidence = max(40, min(98, int((avg_completeness * 100) - (avg_delta * 0.55) + 35)))
+
+        low_confidence_reasons = []
+        for key, confidence_value in domain_confidence.items():
+            if confidence_value < 60:
+                low_confidence_reasons.append(f"{key.lower()} disagreement_or_missing_data")
+
+        if not summary:
+            expected_direction = "upside bias" if score >= 70 else ("downside risk" if score < 45 else "range-bound setup")
+            summary = f"The calibrated signal suggests a {expected_direction} over the next 1-6 months, with confidence driven primarily by the current fundamental/technical alignment."
 
         # ── 8. Compute Change % ───────────────────────────────────────────────
         def sanitize(val):
@@ -406,6 +686,9 @@ async def analyze_stock_stream(ticker: str, target_date: str = None) -> AsyncGen
                 "analysisConfidenceScore": analysis_confidence,
                 "inputHistoryPoints": int(len(hist)),
                 "model": MODEL_NAME,
+                "stockProfile": market_cap_bucket,
+                "domainConfidence": domain_confidence,
+                "lowConfidenceReasons": low_confidence_reasons,
             },
             "ticker": ticker,
             "name": info.get("shortName", info.get("longName", ticker)),
@@ -417,7 +700,7 @@ async def analyze_stock_stream(ticker: str, target_date: str = None) -> AsyncGen
             "market_cap": info.get("marketCap", 0),
             "breakdown": {
                 "technicals": "Bullish" if (technicals.get("RSI_14") or 50) > 50 else "Bearish",
-                "fundamentals": "Strong" if llm_result.get("Sub_Scores", {}).get("Fundamental", 50) > 60 else "Mixed",
+                "fundamentals": "Strong" if calibrated_sub_scores.get("Fundamental", 50) > 60 else "Mixed",
                 "valuation": "Premium" if (fundamentals.get("P_E_Ratio") or 0) > 25 else "Value",
                 "risk": "High" if (macro_risk.get("Stock_Beta", 1) > 1.2 or vix_level > 20) else "Low",
             },
@@ -425,7 +708,10 @@ async def analyze_stock_stream(ticker: str, target_date: str = None) -> AsyncGen
             "technicals": {k: sanitize(v) for k, v in technicals.items()},
             "ai_analysis": {
                 "xai_rationale": llm_result.get("XAI_Rationale", {}),
-                "sub_scores": sub_scores,
+                "sub_scores": calibrated_sub_scores,
+                "llm_sub_scores": {key: _clamp_score(value) for key, value in llm_sub_scores.items()},
+                "deterministic_sub_scores": deterministic_sub_scores,
+                "score_weights": score_weights,
                 "debate": {
                     "bull": bull_out,
                     "bear": bear_out,

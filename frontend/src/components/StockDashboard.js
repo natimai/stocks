@@ -662,6 +662,17 @@ export default function StockDashboard({ initialTicker, onBack }) {
     let currentDisplayChange = displayChangePercent;
     let currentDisplayDate = timeframe;
     const confidenceScore = toFiniteNumber(display?.metadata?.analysisConfidenceScore ?? display?.metadata?.confidenceScore);
+    const domainConfidence = display?.metadata?.domainConfidence && typeof display.metadata.domainConfidence === 'object'
+        ? display.metadata.domainConfidence
+        : null;
+    const stockProfile = typeof display?.metadata?.stockProfile === 'string' ? display.metadata.stockProfile : null;
+    const lowConfidenceReasons = Array.isArray(display?.metadata?.lowConfidenceReasons) ? display.metadata.lowConfidenceReasons : [];
+    const llmSubScores = display?.ai_analysis?.llm_sub_scores && typeof display.ai_analysis.llm_sub_scores === 'object'
+        ? display.ai_analysis.llm_sub_scores
+        : null;
+    const deterministicSubScores = display?.ai_analysis?.deterministic_sub_scores && typeof display.ai_analysis.deterministic_sub_scores === 'object'
+        ? display.ai_analysis.deterministic_sub_scores
+        : null;
 
     if (hoverPrice !== null && firstClose) {
         currentDisplayPrice = hoverPrice;
@@ -1039,6 +1050,83 @@ export default function StockDashboard({ initialTicker, onBack }) {
                         <p className="text-[17px] leading-relaxed font-normal text-white/90">
                             {display.summary}
                         </p>
+                    </motion.section>
+                )}
+
+                {(domainConfidence || stockProfile || lowConfidenceReasons.length > 0) && (
+                    <motion.section
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="bg-[#111114] border border-white/8 rounded-2xl p-5 sm:p-6"
+                    >
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-5">
+                            <div>
+                                <div className="flex items-center gap-2 mb-1.5">
+                                    <CheckCheck className="w-4 h-4" style={{ color: confidenceBadge(confidenceScore || 0).color }} />
+                                    <span className="text-xs font-bold uppercase tracking-widest text-white/50">Signal Quality</span>
+                                </div>
+                                <p className="text-sm text-white/70 max-w-2xl">
+                                    We calibrate the LLM output against raw market data before showing the final score.
+                                </p>
+                            </div>
+                            {stockProfile && (
+                                <div className="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs font-semibold uppercase tracking-widest text-white/60 whitespace-nowrap">
+                                    {stockProfile.replace('_', ' ')}
+                                </div>
+                            )}
+                        </div>
+
+                        {domainConfidence && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+                                {Object.entries(domainConfidence).map(([key, value]) => {
+                                    const numeric = toFiniteNumber(value) || 0;
+                                    const badge = confidenceBadge(numeric);
+                                    const calibrated = toFiniteNumber(sub?.[key]);
+                                    const llmRaw = toFiniteNumber(llmSubScores?.[key]);
+                                    const deterministic = toFiniteNumber(deterministicSubScores?.[key]);
+                                    return (
+                                        <div key={key} className="rounded-xl border border-white/8 bg-black/30 p-4">
+                                            <div className="flex items-center justify-between gap-3 mb-3">
+                                                <span className="text-xs font-bold uppercase tracking-widest text-white/45">{key.replace('_', ' ')}</span>
+                                                <span className="text-xs font-semibold" style={{ color: badge.color }}>{numeric}%</span>
+                                            </div>
+                                            <div className="h-1.5 rounded-full bg-white/8 overflow-hidden mb-3">
+                                                <div
+                                                    className="h-full rounded-full"
+                                                    style={{ width: `${numeric}%`, backgroundColor: badge.color }}
+                                                />
+                                            </div>
+                                            <div className="space-y-1.5 text-xs text-white/55">
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <span>Final</span>
+                                                    <span className="text-white/85">{calibrated != null ? calibrated : 'N/A'}</span>
+                                                </div>
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <span>LLM</span>
+                                                    <span>{llmRaw != null ? llmRaw : 'N/A'}</span>
+                                                </div>
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <span>Data</span>
+                                                    <span>{deterministic != null ? deterministic : 'N/A'}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {lowConfidenceReasons.length > 0 && (
+                            <div className="rounded-xl border border-amber-500/20 bg-amber-500/8 px-4 py-3">
+                                <div className="flex items-center gap-2 mb-1.5">
+                                    <AlertTriangle className="w-4 h-4 text-amber-400" />
+                                    <span className="text-xs font-bold uppercase tracking-widest text-amber-300/90">Watchouts</span>
+                                </div>
+                                <p className="text-sm text-white/70">
+                                    {lowConfidenceReasons.map((item) => item.replaceAll('_', ' ')).join(' • ')}
+                                </p>
+                            </div>
+                        )}
                     </motion.section>
                 )}
 
