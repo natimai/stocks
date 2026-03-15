@@ -131,6 +131,12 @@ function normalizeStockPayload(payload) {
     };
 }
 
+function confidenceBadge(score) {
+    if (score >= 85) return { label: 'High Confidence', color: '#00C805' };
+    if (score >= 65) return { label: 'Moderate Confidence', color: '#FFB800' };
+    return { label: 'Low Confidence', color: '#FF5000' };
+}
+
 // ─── TOOLTIPS ─────────────────────────────────────────────────────────────────
 function RadarTip({ active, payload, trendColor }) {
     if (!active || !payload?.length) return null;
@@ -655,6 +661,7 @@ export default function StockDashboard({ initialTicker, onBack }) {
     let currentDisplayPrice = display?.price;
     let currentDisplayChange = displayChangePercent;
     let currentDisplayDate = timeframe;
+    const confidenceScore = toFiniteNumber(display?.metadata?.analysisConfidenceScore ?? display?.metadata?.confidenceScore);
 
     if (hoverPrice !== null && firstClose) {
         currentDisplayPrice = hoverPrice;
@@ -944,11 +951,26 @@ export default function StockDashboard({ initialTicker, onBack }) {
                                 </div>
                             </div>
                             {display?.metadata && (
-                                <div className="mt-4 text-xs font-medium text-white/40 opacity-80 backdrop-blur-sm border border-white/5 rounded-full px-3 py-1.5 bg-white/5 flex items-center gap-2 whitespace-nowrap">
-                                    {display.metadata.is_cached
-                                        || display.metadata.cached
-                                        ? <><Zap className="w-3.5 h-3.5" /> Generated today</>
-                                        : <><Activity className="w-3.5 h-3.5" /> Analyzed live</>}
+                                <div className="mt-4 flex flex-wrap gap-2 justify-start md:justify-end">
+                                    <div className="text-xs font-medium text-white/40 opacity-80 backdrop-blur-sm border border-white/5 rounded-full px-3 py-1.5 bg-white/5 flex items-center gap-2 whitespace-nowrap">
+                                        {display.metadata.is_cached
+                                            || display.metadata.cached
+                                            ? <><Zap className="w-3.5 h-3.5" /> Generated today</>
+                                            : <><Activity className="w-3.5 h-3.5" /> Analyzed live</>}
+                                    </div>
+                                    {confidenceScore != null && (
+                                        <div
+                                            className="text-xs font-semibold backdrop-blur-sm border rounded-full px-3 py-1.5 flex items-center gap-1.5 whitespace-nowrap"
+                                            style={{
+                                                borderColor: `${confidenceBadge(confidenceScore).color}55`,
+                                                background: `${confidenceBadge(confidenceScore).color}14`,
+                                                color: confidenceBadge(confidenceScore).color,
+                                            }}
+                                        >
+                                            <CheckCheck className="w-3.5 h-3.5" />
+                                            {confidenceBadge(confidenceScore).label} {Math.round(confidenceScore)}%
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>

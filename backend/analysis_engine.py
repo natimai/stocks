@@ -361,6 +361,19 @@ async def analyze_stock_stream(ticker: str, target_date: str = None) -> AsyncGen
         score = llm_result.get("Recommendation_Score", 50)
         recommendation = llm_result.get("Classification", "HOLD").upper()
         summary = llm_result.get("Expected_Trend_1_to_6_Months", "")
+        sub_scores = llm_result.get("Sub_Scores", {}) or {}
+
+        numeric_sub_scores = []
+        for value in sub_scores.values():
+            try:
+                numeric_sub_scores.append(float(value))
+            except (TypeError, ValueError):
+                continue
+        if numeric_sub_scores:
+            score_spread = max(numeric_sub_scores) - min(numeric_sub_scores)
+            analysis_confidence = max(40, min(98, int(100 - (score_spread * 0.8))))
+        else:
+            analysis_confidence = 55
 
         # ── 8. Compute Change % ───────────────────────────────────────────────
         def sanitize(val):
@@ -390,6 +403,9 @@ async def analyze_stock_stream(ticker: str, target_date: str = None) -> AsyncGen
             "metadata": {
                 "generated_at": datetime.now().isoformat(),
                 "is_cached": False,
+                "analysisConfidenceScore": analysis_confidence,
+                "inputHistoryPoints": int(len(hist)),
+                "model": MODEL_NAME,
             },
             "ticker": ticker,
             "name": info.get("shortName", info.get("longName", ticker)),
@@ -409,7 +425,7 @@ async def analyze_stock_stream(ticker: str, target_date: str = None) -> AsyncGen
             "technicals": {k: sanitize(v) for k, v in technicals.items()},
             "ai_analysis": {
                 "xai_rationale": llm_result.get("XAI_Rationale", {}),
-                "sub_scores": llm_result.get("Sub_Scores", {}),
+                "sub_scores": sub_scores,
                 "debate": {
                     "bull": bull_out,
                     "bear": bear_out,
@@ -511,4 +527,3 @@ Keep your response concise (2-4 sentences max), punchy, and highly insightful. R
         return response.strip()
     except Exception as e:
         return f"Agent {target_agent} failed to respond: {str(e)}"
-

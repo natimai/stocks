@@ -28,6 +28,26 @@ def _safe_get(info: Dict[str, Any], key: str, default=None):
     return default if value is None else value
 
 
+def _to_float(value: Any) -> Any:
+    try:
+        if value is None:
+            return None
+        val = float(value)
+        if pd.isna(val):
+            return None
+        return val
+    except Exception:
+        return None
+
+
+def _first_valid_number(candidates: List[Any]) -> Any:
+    for item in candidates:
+        parsed = _to_float(item)
+        if parsed is not None:
+            return parsed
+    return None
+
+
 def _fetch_search_results(query: str) -> List[Dict[str, Any]]:
     url = "https://query2.finance.yahoo.com/v1/finance/search"
     params = {"q": query, "quotesCount": 5, "newsCount": 0}
@@ -90,7 +110,45 @@ def _fetch_chart_data(ticker: str, period: str, interval: str):
             message="Chart provider returned invalid payload",
             details={"provider": "yfinance"},
         )
-    return result
+
+    normalized = []
+    for point in result:
+        if not isinstance(point, dict):
+            continue
+
+        time_val = point.get("time")
+        if not isinstance(time_val, (str, int, float)):
+            continue
+
+        close = _first_valid_number([point.get("close"), point.get("value")])
+        if close is None:
+            continue
+
+        open_val = _first_valid_number([point.get("open"), close])
+        high_val = _first_valid_number([point.get("high"), max(open_val, close)])
+        low_val = _first_valid_number([point.get("low"), min(open_val, close)])
+        volume_val = _first_valid_number([point.get("volume"), 0]) or 0
+
+        normalized.append(
+            {
+                "time": time_val,
+                "open": round(open_val, 4),
+                "high": round(high_val, 4),
+                "low": round(low_val, 4),
+                "close": round(close, 4),
+                "volume": int(volume_val),
+            }
+        )
+
+    if not normalized:
+        raise ApiError(
+            status_code=502,
+            code="CHART_EMPTY_AFTER_SANITIZE",
+            message="Chart provider returned unusable data",
+            details={"provider": "yfinance", "ticker": ticker.upper(), "period": period, "interval": interval},
+        )
+
+    return normalized
 
 
 def get_chart_cached(ticker: str, period: str, interval: str):
@@ -130,6 +188,10 @@ def _fetch_quick_stats(ticker: str) -> Dict[str, Any]:
             record_provider_call("yfinance.quick_stats")
             stock = yf.Ticker(ticker)
             info = stock.info
+            try:
+                fast_info = dict(getattr(stock, "fast_info", {}) or {})
+            except Exception:
+                fast_info = {}
             hist = stock.history(period="1mo")
 
             if hist is None or hist.empty:
@@ -140,33 +202,68 @@ def _fetch_quick_stats(ticker: str) -> Dict[str, Any]:
                     details={"ticker": ticker.upper(), "provider": "yfinance"},
                 )
 
-            current_price = info.get("currentPrice", 0) or hist["Close"].iloc[-1]
-            change_pct = info.get("regularMarketChangePercent", None)
+            current_price = _first_valid_number(
+                [
+                    info.get("currentPrice"),
+                    info.get("regularMarketPrice"),
+                    fast_info.get("lastPrice"),
+                    hist["Close"].iloc[-1] if len(hist) > 0 else None,
+                ]
+            )
+            if current_price is None:
+                raise ApiError(
+                    status_code=502,
+                    code="QUICK_STATS_MISSING_PRICE",
+                    message="Quick stats provider missing latest price",
+                    details={"ticker": ticker.upper(), "provider": "yfinance"},
+                )
 
-            if change_pct is not None:
-                change_pct = change_pct * 100
-                if abs(change_pct) > 25 and len(hist) > 1:
-                    prev_close = hist["Close"].iloc[-2]
-                    change_pct = ((current_price - prev_close) / prev_close) * 100
-            elif len(hist) > 1:
-                prev_close = hist["Close"].iloc[-2]
+            prev_close = _first_valid_number(
+                [
+                    info.get("regularMarketPreviousClose"),
+                    fast_info.get("previousClose"),
+                    hist["Close"].iloc[-2] if len(hist) > 1 else None,
+                ]
+            )
+            raw_change_pct = _to_float(info.get("regularMarketChangePercent"))
+            change_pct = raw_change_pct * 100 if raw_change_pct is not None else None
+
+            if (change_pct is None or abs(change_pct) > 25) and prev_close and prev_close != 0:
                 change_pct = ((current_price - prev_close) / prev_close) * 100
-            else:
+            if change_pct is None:
                 change_pct = 0.0
 
             score, recommendation = _read_cached_analysis_score(ticker)
 
+            market_cap = _safe_get(info, "marketCap", None)
+            missing_criticals = []
+            if market_cap in (None, 0):
+                missing_criticals.append("marketCap")
+            if prev_close is None:
+                missing_criticals.append("previousClose")
+            if len(hist) < 10:
+                missing_criticals.append("shortHistoryWindow")
+
+            available_signals = 5 - len(missing_criticals)
+            confidence_score = max(35, min(99, int((available_signals / 5) * 100)))
+
             return {
                 "ticker": ticker.upper(),
                 "name": info.get("shortName", info.get("longName", ticker.upper())),
-                "price": float(current_price) if current_price is not None else 0.0,
-                "changePercent": float(change_pct) if change_pct is not None else 0.0,
+                "price": float(current_price),
+                "changePercent": float(change_pct),
                 "score": score,
                 "recommendation": recommendation,
-                "market_cap": _safe_get(info, "marketCap", 0),
+                "market_cap": market_cap or 0,
                 "metrics": {
                     "pe_ratio": _safe_get(info, "trailingPE"),
                     "beta": _safe_get(info, "beta"),
+                },
+                "metadata": {
+                    "confidenceScore": confidence_score,
+                    "historyPoints": int(len(hist)),
+                    "missingCriticals": missing_criticals,
+                    "provider": "yfinance",
                 },
                 "chartData": [
                     {
